@@ -1,0 +1,8 @@
+{
+  "name": "Cadastro de Colaboradores",
+  "description": "Sistema completo para cadastro, gerenciamento e exportação de dados de colaboradores em PDF, com painel de estatísticas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
