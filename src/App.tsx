@@ -27,10 +27,12 @@ import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import ColaboradorForm from './components/ColaboradorForm';
 import ColaboradorList from './components/ColaboradorList';
+import EquipamentoList from './components/EquipamentoList';
 import SettingsModal from './components/SettingsModal';
 import LoginPage from './components/LoginPage';
-import { Colaborador, ActiveTab, UserSettings } from './types';
-import { INITIAL_COLABORADORES } from './data';
+import { Colaborador, Equipamento, ActiveTab, UserSettings, NotaFiscal } from './types';
+import { INITIAL_COLABORADORES, INITIAL_EQUIPAMENTOS, INITIAL_NOTAS_FISCAIS } from './data';
+import NotaFiscalList from './components/NotaFiscalList';
 
 // Helper function to decode and validate custom JWT token claims (XSS & Expiry checks)
 function isTokenValid(token: string | null): boolean {
@@ -81,6 +83,16 @@ export default function App() {
     return INITIAL_COLABORADORES;
   });
 
+  const [equipamentos, setEquipamentos] = useState<Equipamento[]>(() => {
+    try {
+      const saved = localStorage.getItem('colab_registry_equipamentos');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Falha ao ler equipamentos do localStorage', e);
+    }
+    return INITIAL_EQUIPAMENTOS;
+  });
+
   const [userSettings, setUserSettings] = useState<UserSettings>(() => {
     try {
       const saved = localStorage.getItem('colab_registry_settings');
@@ -96,14 +108,32 @@ export default function App() {
     };
   });
 
+  const [notasFiscais, setNotasFiscais] = useState<NotaFiscal[]>(() => {
+    try {
+      const saved = localStorage.getItem('colab_registry_notas_fiscais');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Falha ao ler notas fiscais do localStorage', e);
+    }
+    return INITIAL_NOTAS_FISCAIS;
+  });
+
   // Save changes to localStorage
   useEffect(() => {
     localStorage.setItem('colab_registry_data', JSON.stringify(colaboradores));
   }, [colaboradores]);
 
   useEffect(() => {
+    localStorage.setItem('colab_registry_equipamentos', JSON.stringify(equipamentos));
+  }, [equipamentos]);
+
+  useEffect(() => {
     localStorage.setItem('colab_registry_settings', JSON.stringify(userSettings));
   }, [userSettings]);
+
+  useEffect(() => {
+    localStorage.setItem('colab_registry_notas_fiscais', JSON.stringify(notasFiscais));
+  }, [notasFiscais]);
 
   // Synchronize token state to localStorage
   useEffect(() => {
@@ -192,6 +222,138 @@ export default function App() {
 
     setColaboradorToEdit(null);
     setActiveTab('colaboradores');
+  };
+
+  // Create / Edit Equipamento Save handler
+  const handleSaveEquipamento = (equipamento: Equipamento) => {
+    const oldEquipamento = equipamentos.find((e) => e.id === equipamento.id);
+    const usuarioResponsavel = userSettings.nomeUsuario || 'Administrador';
+    const dataHora = new Date().toISOString();
+    
+    let novosHistoricos = [...(oldEquipamento?.historico || [])];
+
+    if (!oldEquipamento) {
+      // 1. It's a new registration
+      let desc = `Equipamento registrado com status inicial ${equipamento.status}.`;
+      if (equipamento.colaboradorId) {
+        const colab = colaboradores.find(c => c.id === equipamento.colaboradorId);
+        desc += ` Atribuído ao colaborador ${colab ? colab.nomeCompleto : 'desconhecido'}.`;
+      } else {
+        desc += ` Mantido em estoque.`;
+      }
+      
+      novosHistoricos.push({
+        id: `hist-auto-${Date.now()}-1`,
+        data: dataHora,
+        acao: 'Cadastro de Ativo',
+        descricao: desc,
+        usuario: usuarioResponsavel
+      });
+    } else {
+      // 2. It's an edit. Compare changes
+      const mudancas: { acao: string; desc: string }[] = [];
+
+      // Check status change
+      if (oldEquipamento.status !== equipamento.status) {
+        mudancas.push({
+          acao: 'Alteração de Status',
+          desc: `Status operacional alterado de "${oldEquipamento.status}" para "${equipamento.status}".`
+        });
+      }
+
+      // Check company change
+      if (oldEquipamento.empresa !== equipamento.empresa) {
+        mudancas.push({
+          acao: 'Alteração de Empresa',
+          desc: `Empresa vinculada alterada de "${oldEquipamento.empresa}" para "${equipamento.empresa}".`
+        });
+      }
+
+      // Check collaborator change
+      if (oldEquipamento.colaboradorId !== equipamento.colaboradorId) {
+        const oldColab = oldEquipamento.colaboradorId ? colaboradores.find(c => c.id === oldEquipamento.colaboradorId) : null;
+        const newColab = equipamento.colaboradorId ? colaboradores.find(c => c.id === equipamento.colaboradorId) : null;
+        
+        const deStr = oldColab ? `colaborador "${oldColab.nomeCompleto}"` : 'sem atribuição (estoque)';
+        const paraStr = newColab ? `colaborador "${newColab.nomeCompleto}"` : 'sem atribuição (devolvido ao estoque)';
+        
+        mudancas.push({
+          acao: 'Alteração de Vínculo',
+          desc: `Responsável alterado de: ${deStr} para: ${paraStr}.`
+        });
+      }
+
+      // Check key text changes
+      const specsAlteradas: string[] = [];
+      if (oldEquipamento.nome !== equipamento.nome) specsAlteradas.push('nome');
+      if (oldEquipamento.marcaModelo !== equipamento.marcaModelo) specsAlteradas.push('marca/modelo');
+      if (oldEquipamento.numeroSerie !== equipamento.numeroSerie) specsAlteradas.push('número de série');
+      if (oldEquipamento.patrimonio !== equipamento.patrimonio) specsAlteradas.push('código de patrimônio');
+      
+      if (specsAlteradas.length > 0) {
+        mudancas.push({
+          acao: 'Edição de Cadastro',
+          desc: `Especificações de cadastro atualizadas: ${specsAlteradas.join(', ')}.`
+        });
+      }
+
+      // If any change detected, append history log
+      if (mudancas.length > 0) {
+        mudancas.forEach((mudanca, index) => {
+          novosHistoricos.push({
+            id: `hist-auto-${Date.now()}-${index}`,
+            data: dataHora,
+            acao: mudanca.acao,
+            descricao: mudanca.desc,
+            usuario: usuarioResponsavel
+          });
+        });
+      }
+    }
+
+    const equipamentoAtualizado = {
+      ...equipamento,
+      historico: novosHistoricos
+    };
+
+    const isEdit = !!oldEquipamento;
+    if (isEdit) {
+      setEquipamentos((prev) => prev.map((e) => (e.id === equipamento.id ? equipamentoAtualizado : e)));
+      addToast(`Equipamento ${equipamento.nome} atualizado com sucesso!`, 'success');
+    } else {
+      setEquipamentos((prev) => [equipamentoAtualizado, ...prev]);
+      addToast(`Equipamento ${equipamento.nome} cadastrado com sucesso!`, 'success');
+    }
+  };
+
+  // Delete Equipamento handler
+  const handleDeleteEquipamento = (id: string) => {
+    const eq = equipamentos.find((e) => e.id === id);
+    if (eq) {
+      setEquipamentos((prev) => prev.filter((e) => e.id !== id));
+      addToast(`Equipamento ${eq.nome} removido do inventário.`, 'success');
+    }
+  };
+
+  // Save or update Nota Fiscal
+  const handleSaveNotaFiscal = (nota: NotaFiscal) => {
+    const exists = notasFiscais.some(n => n.id === nota.id);
+    if (exists) {
+      setNotasFiscais(prev => prev.map(n => n.id === nota.id ? nota : n));
+      addToast(`Nota Fiscal Nº ${nota.numero} atualizada com sucesso!`, 'success');
+    } else {
+      setNotasFiscais(prev => [nota, ...prev]);
+      addToast(`Nota Fiscal Nº ${nota.numero} cadastrada com sucesso!`, 'success');
+    }
+  };
+
+  // Delete Nota Fiscal
+  const handleDeleteNotaFiscal = (id: string) => {
+    const nf = notasFiscais.find(n => n.id === id);
+    if (nf) {
+      setNotasFiscais(prev => prev.filter(n => n.id !== id));
+      addToast(`Nota Fiscal Nº ${nf.numero} excluída com sucesso.`, 'success');
+    }
   };
 
   // Switch to edit mode
@@ -366,6 +528,25 @@ export default function App() {
                   colaboradorToEdit={colaboradorToEdit}
                   onSave={handleSaveColaborador}
                   onCancel={handleCancelForm}
+                />
+              )}
+
+              {activeTab === 'equipamentos' && (
+                <EquipamentoList
+                  equipamentos={equipamentos}
+                  colaboradores={colaboradores}
+                  onSave={handleSaveEquipamento}
+                  onDelete={handleDeleteEquipamento}
+                  userSettings={userSettings}
+                />
+              )}
+
+              {activeTab === 'notas_fiscais' && (
+                <NotaFiscalList
+                  notasFiscais={notasFiscais}
+                  onSave={handleSaveNotaFiscal}
+                  onDelete={handleDeleteNotaFiscal}
+                  userSettings={userSettings}
                 />
               )}
             </motion.div>

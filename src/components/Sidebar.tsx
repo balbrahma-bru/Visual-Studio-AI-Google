@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, LayoutDashboard, UserPlus, FileText, Menu, X, Landmark } from 'lucide-react';
+import { Users, LayoutDashboard, UserPlus, FileText, Menu, X, Landmark, Cpu } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface SidebarProps {
@@ -28,6 +28,18 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, toggleSidebar
       label: 'Cadastrar Colaborador',
       icon: UserPlus,
       description: 'Formulário de novo registro'
+    },
+    {
+      id: 'equipamentos' as ActiveTab,
+      label: 'Equipamentos',
+      icon: Cpu,
+      description: 'Inventário de hardware e ativos'
+    },
+    {
+      id: 'notas_fiscais' as ActiveTab,
+      label: 'Notas Fiscais',
+      icon: FileText,
+      description: 'Gestão de notas, itens e anexos'
     }
   ];
 
