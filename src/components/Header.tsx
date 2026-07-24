@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Bell, Settings, LogOut, Menu, User, Sparkles, Building, Mail } from 'lucide-react';
+import { Search, Bell, Settings, LogOut, Menu, User, Sparkles, Building, Mail, Database } from 'lucide-react';
 import { UserSettings, ActiveTab } from '../types';
 
 interface HeaderProps {
@@ -10,6 +10,7 @@ interface HeaderProps {
   toggleSidebar: () => void;
   userSettings: UserSettings;
   openSettings: () => void;
+  openDatabaseModal?: () => void;
   onLogout?: () => void;
 }
 
@@ -21,6 +22,7 @@ export default function Header({
   toggleSidebar,
   userSettings,
   openSettings,
+  openDatabaseModal,
   onLogout,
 }: HeaderProps) {
   const [profileOpen, setProfileOpen] = useState(false);
@@ -77,7 +79,17 @@ export default function Header({
       </div>
 
       {/* Right section: System notifications & User Profile Dropdown */}
-      <div className="flex items-center space-x-4 ml-4 shrink-0">
+      <div className="flex items-center space-x-3 md:space-x-4 ml-4 shrink-0">
+        <button
+          id="btn-open-db-header"
+          onClick={openDatabaseModal}
+          className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-700 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+          title="Ver e Baixar Script MySQL do Banco de Dados"
+        >
+          <Database size={14} className="text-indigo-600" />
+          <span>Banco MySQL</span>
+        </button>
+
         <div className="hidden sm:flex items-center space-x-2 text-xs text-natural-muted font-mono">
           <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
           <span>Online</span>
@@ -130,11 +142,24 @@ export default function Header({
                     setProfileOpen(false);
                     openSettings();
                   }}
-                  className="w-full text-left px-4 py-2 text-xs text-natural-text hover:bg-natural-light flex items-center transition-colors"
+                  className="w-full text-left px-4 py-2 text-xs text-natural-text hover:bg-natural-light flex items-center transition-colors cursor-pointer"
                 >
                   <Settings size={14} className="mr-2 text-natural-muted" />
                   Configurações do Sistema
                 </button>
+
+                <button
+                  id="dropdown-database-btn"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    if (openDatabaseModal) openDatabaseModal();
+                  }}
+                  className="w-full text-left px-4 py-2 text-xs text-natural-text hover:bg-indigo-50 hover:text-indigo-700 flex items-center transition-colors cursor-pointer"
+                >
+                  <Database size={14} className="mr-2 text-indigo-600" />
+                  Banco de Dados MySQL (.sql)
+                </button>
+
                 <div className="px-4 py-2">
                   <div className="bg-natural-light rounded-lg p-2 border border-natural-border flex items-start space-x-1.5">
                     <Sparkles size={12} className="text-natural-primary mt-0.5 shrink-0" />

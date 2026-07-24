@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Settings, Save, X, Building, User, Mail, ShieldAlert } from 'lucide-react';
+import { Settings, Save, X, Building, User, Mail, ShieldAlert, Database, Download } from 'lucide-react';
 import { UserSettings } from '../types';
 
 interface SettingsModalProps {
   currentSettings: UserSettings;
   onSave: (settings: UserSettings) => void;
   onClose: () => void;
+  openDatabaseModal?: () => void;
 }
 
-export default function SettingsModal({ currentSettings, onSave, onClose }: SettingsModalProps) {
+export default function SettingsModal({ currentSettings, onSave, onClose, openDatabaseModal }: SettingsModalProps) {
   const [nomeUsuario, setNomeUsuario] = useState(currentSettings.nomeUsuario);
   const [empresa, setEmpresa] = useState(currentSettings.empresa);
   const [email, setEmail] = useState(currentSettings.email);
@@ -134,6 +135,38 @@ export default function SettingsModal({ currentSettings, onSave, onClose }: Sett
                 />
               </div>
             </div>
+
+            {/* Banco de Dados MySQL Export Block */}
+            {openDatabaseModal && (
+              <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2 pt-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Database size={15} className="text-indigo-600" />
+                    <span className="text-xs font-bold text-slate-800">
+                      Banco de Dados MySQL
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-semibold bg-white px-2 py-0.5 rounded border border-indigo-100 text-indigo-700">
+                    .SQL DDL/DML
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-snug">
+                  Exporte todas as tabelas, relacionamentos, chaves e dados para um arquivo <code className="font-mono text-indigo-700">bio_gestao_db.sql</code>.
+                </p>
+                <button
+                  type="button"
+                  id="settings-open-db-btn"
+                  onClick={() => {
+                    onClose();
+                    openDatabaseModal();
+                  }}
+                  className="w-full py-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all shadow-2xs cursor-pointer"
+                >
+                  <Download size={13} />
+                  <span>Visualizar & Baixar Script MySQL</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Footer Buttons */}

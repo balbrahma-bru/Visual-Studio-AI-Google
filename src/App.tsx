@@ -33,6 +33,7 @@ import LoginPage from './components/LoginPage';
 import { Colaborador, Equipamento, ActiveTab, UserSettings, NotaFiscal } from './types';
 import { INITIAL_COLABORADORES, INITIAL_EQUIPAMENTOS, INITIAL_NOTAS_FISCAIS } from './data';
 import NotaFiscalList from './components/NotaFiscalList';
+import DatabaseExportModal from './components/DatabaseExportModal';
 
 // Helper function to decode and validate custom JWT token claims (XSS & Expiry checks)
 function isTokenValid(token: string | null): boolean {
@@ -162,6 +163,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [databaseModalOpen, setDatabaseModalOpen] = useState(false);
   const [colaboradorToEdit, setColaboradorToEdit] = useState<Colaborador | null>(null);
 
   // ----------------------------------------------------
@@ -485,6 +487,7 @@ export default function App() {
           toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           userSettings={userSettings}
           openSettings={() => setSettingsOpen(true)}
+          openDatabaseModal={() => setDatabaseModalOpen(true)}
           onLogout={handleLogout}
         />
 
@@ -567,6 +570,18 @@ export default function App() {
             addToast('Configurações atualizadas com sucesso!', 'success');
           }}
           onClose={() => setSettingsOpen(false)}
+          openDatabaseModal={() => setDatabaseModalOpen(true)}
+        />
+      )}
+
+      {/* Database Export Modal */}
+      {databaseModalOpen && (
+        <DatabaseExportModal
+          colaboradores={colaboradores}
+          equipamentos={equipamentos}
+          notasFiscais={notasFiscais}
+          userSettings={userSettings}
+          onClose={() => setDatabaseModalOpen(false)}
         />
       )}
 
