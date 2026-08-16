@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UserPlus, Save, X, Sparkles, HelpCircle, Check, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { UserPlus, Save, X, Sparkles, HelpCircle, Check, AlertTriangle, Plus, Trash2, Phone } from 'lucide-react';
 import { Colaborador } from '../types';
 import { SETORES, AVATAR_COLORS, formatCPF, formatRG, formatTelefone, validateCPF } from '../data';
 
@@ -7,6 +7,7 @@ interface ColaboradorFormProps {
   colaboradorToEdit: Colaborador | null;
   onSave: (colaborador: Colaborador) => void;
   onCancel: () => void;
+  colaboradores?: Colaborador[];
 }
 
 // Options for Empresa and Filial
@@ -38,17 +39,18 @@ const getEmailForExibicao = (nameExib: string, emp: string) => {
   return `${prefix}${suffix}`;
 };
 
-export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }: ColaboradorFormProps) {
+export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel, colaboradores }: ColaboradorFormProps) {
   // Form fields
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [exibicao, setExibicao] = useState('');
   const [cpf, setCpf] = useState('');
   const [rg, setRg] = useState('');
+  const [matricula, setMatricula] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
   const [cargo, setCargo] = useState('');
   const [setor, setSetor] = useState('');
   const [email, setEmail] = useState('');
-  const [telefone, setTelefone] = useState('');
+  const [telefones, setTelefones] = useState<string[]>(['']);
   const [dataAdmissao, setDataAdmissao] = useState('');
   const [status, setStatus] = useState<'Ativo' | 'Inativo'>('Ativo');
   const [empresa, setEmpresa] = useState('Bio Brands');
@@ -59,6 +61,32 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
   const [cpfValid, setCpfValid] = useState<boolean | null>(null);
   const [isEmailManuallyEdited, setIsEmailManuallyEdited] = useState(false);
 
+  // Check duplicate Nome Completo and Nome de Exibição in real-time
+  const normalizeText = (text: string) =>
+    text.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  const isNomeCompletoDuplicate = useMemo(() => {
+    if (!nomeCompleto.trim() || !colaboradores) return false;
+    const target = normalizeText(nomeCompleto);
+    return colaboradores.some((c) => {
+      if (colaboradorToEdit && c.id === colaboradorToEdit.id) return false;
+      const isAtivo = (c.status || '').trim().toLowerCase() === 'ativo';
+      if (!isAtivo) return false;
+      return normalizeText(c.nomeCompleto) === target;
+    });
+  }, [nomeCompleto, colaboradores, colaboradorToEdit]);
+
+  const isExibicaoDuplicate = useMemo(() => {
+    if (!exibicao.trim() || !colaboradores) return false;
+    const target = normalizeText(exibicao);
+    return colaboradores.some((c) => {
+      if (colaboradorToEdit && c.id === colaboradorToEdit.id) return false;
+      const isAtivo = (c.status || '').trim().toLowerCase() === 'ativo';
+      if (!isAtivo) return false;
+      return normalizeText(c.exibicao) === target;
+    });
+  }, [exibicao, colaboradores, colaboradorToEdit]);
+
   // If editing, fill the form
   useEffect(() => {
     if (colaboradorToEdit) {
@@ -66,11 +94,21 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
       setExibicao(colaboradorToEdit.exibicao);
       setCpf(colaboradorToEdit.cpf);
       setRg(colaboradorToEdit.rg);
+      setMatricula(colaboradorToEdit.matricula || '');
       setDataNascimento(colaboradorToEdit.dataNascimento);
       setCargo(colaboradorToEdit.cargo);
       setSetor(colaboradorToEdit.setor);
       setEmail(colaboradorToEdit.email || '');
-      setTelefone(colaboradorToEdit.telefone || '');
+      
+      // Parse multi-line telefones if separated by slash, comma, or newline
+      const rawTel = colaboradorToEdit.telefone || '';
+      if (rawTel.trim()) {
+        const parts = rawTel.split(/\s*(?:\/|,|\n)\s*/).map((p) => p.trim()).filter(Boolean);
+        setTelefones(parts.length > 0 ? parts : ['']);
+      } else {
+        setTelefones(['']);
+      }
+
       setDataAdmissao(colaboradorToEdit.dataAdmissao || '');
       setStatus(colaboradorToEdit.status);
       setEmpresa(colaboradorToEdit.empresa || 'Bio Brands');
@@ -87,11 +125,12 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
       setExibicao('');
       setCpf('');
       setRg('');
+      setMatricula('');
       setDataNascimento('');
       setCargo('');
       setSetor(SETORES[0] || '');
       setEmail('');
-      setTelefone('');
+      setTelefones(['']);
       setDataAdmissao(new Date().toISOString().split('T')[0]);
       setStatus('Ativo');
       setEmpresa('Bio Brands');
@@ -150,45 +189,89 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
     setRg(formatRG(e.target.value));
   };
 
-  const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTelefone(formatTelefone(e.target.value));
+  const handleTelefoneChange = (index: number, value: string) => {
+    const formatted = formatTelefone(value);
+    setTelefones((prev) => {
+      const next = [...prev];
+      next[index] = formatted;
+      return next;
+    });
+  };
+
+  const handleAddTelefone = () => {
+    setTelefones((prev) => [...prev, '']);
+  };
+
+  const handleRemoveTelefone = (index: number) => {
+    setTelefones((prev) => {
+      if (prev.length <= 1) return [''];
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   // Handle Empresa change and update corresponding Filial selection
   const handleEmpresaChange = (novaEmpresa: string) => {
     setEmpresa(novaEmpresa);
-    const validFiliais = FILIAIS_BY_EMPRESA[novaEmpresa] || [];
-    if (validFiliais.length > 0) {
-      if (!validFiliais.includes(filial)) {
-        setFilial(validFiliais[0]);
-      }
-    }
-    
     if (!isEmailManuallyEdited) {
       setEmail(getEmailForExibicao(exibicao, novaEmpresa));
     }
   };
+
+  // Compute all available Filiais (ensuring current filial and custom filiais are always included and selectable)
+  const filialOptions = useMemo(() => {
+    const ALL_KNOWN_FILIAIS = [
+      'Rio de Janeiro',
+      'Paraíba',
+      'Brusque',
+      'Moema',
+      'Vila Madalena',
+      'Recife',
+      'Matriz',
+      'CDBR116'
+    ];
+    const preferred = FILIAIS_BY_EMPRESA[empresa] || [];
+    const set = new Set([...preferred, ...ALL_KNOWN_FILIAIS]);
+    if (filial) set.add(filial);
+    if (colaboradorToEdit?.filial) set.add(colaboradorToEdit.filial);
+    if (colaboradores) {
+      colaboradores.forEach((c) => {
+        if (c.filial) set.add(c.filial);
+      });
+    }
+    return Array.from(set).filter(Boolean);
+  }, [empresa, filial, colaboradorToEdit, colaboradores]);
 
   // Validation before saving
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: { [key: string]: string } = {};
 
-    if (!nomeCompleto.trim()) newErrors.nomeCompleto = 'Nome completo é obrigatório.';
-    if (!exibicao.trim()) newErrors.exibicao = 'Nome de exibição é obrigatório.';
-    
-    if (!cpf) {
-      newErrors.cpf = 'CPF é obrigatório.';
-    } else if (cpf.length !== 14) {
-      newErrors.cpf = 'O CPF deve ter 11 dígitos no formato 000.000.000-00.';
-    } else if (!validateCPF(cpf)) {
-      newErrors.cpf = 'CPF inválido (dígitos verificadores incorretos).';
+    if (!nomeCompleto.trim()) {
+      newErrors.nomeCompleto = 'Nome completo é obrigatório.';
+    } else if (isNomeCompletoDuplicate) {
+      newErrors.nomeCompleto = 'O Nome Completo digitado já existe em outro colaborador ativo.';
     }
 
-    if (!rg) {
-      newErrors.rg = 'RG é obrigatório.';
-    } else if (rg.length < 10) {
-      newErrors.rg = 'RG inválido.';
+    if (!exibicao.trim()) {
+      newErrors.exibicao = 'Nome de exibição é obrigatório.';
+    } else if (isExibicaoDuplicate) {
+      newErrors.exibicao = 'O Nome de Exibição digitado já existe em outro colaborador ativo.';
+    }
+    
+    // CPF validation (opcional)
+    if (cpf && cpf.trim()) {
+      if (cpf.length !== 14) {
+        newErrors.cpf = 'O CPF deve ter 11 dígitos no formato 000.000.000-00.';
+      } else if (!validateCPF(cpf)) {
+        newErrors.cpf = 'CPF inválido (dígitos verificadores incorretos).';
+      }
+    }
+
+    // RG validation (opcional)
+    if (rg && rg.trim()) {
+      if (rg.length < 5) {
+        newErrors.rg = 'RG inválido.';
+      }
     }
 
     if (!dataNascimento) {
@@ -224,11 +307,15 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
       exibicao: exibicao.trim(),
       cpf,
       rg,
+      matricula: matricula.trim(),
       dataNascimento,
       cargo: cargo.trim(),
       setor,
       email: email.trim() || getEmailForExibicao(exibicao, empresa),
-      telefone: telefone.trim(),
+      telefone: telefones
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .join(' / '),
       dataAdmissao: dataAdmissao || new Date().toISOString().split('T')[0],
       status,
       avatarColor: colaboradorToEdit?.avatarColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
@@ -294,8 +381,16 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Nome Completo */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-natural-text block">
-                Nome Completo <span className="text-rose-500">*</span>
+              <label className="text-xs font-bold text-natural-text block flex items-center justify-between">
+                <span>
+                  Nome Completo <span className="text-rose-500">*</span>
+                </span>
+                {isNomeCompletoDuplicate && (
+                  <span className="text-[11px] font-semibold text-rose-600 flex items-center space-x-1 animate-pulse">
+                    <AlertTriangle size={12} />
+                    <span>Nome já cadastrado!</span>
+                  </span>
+                )}
               </label>
               <input
                 id="input-nome-completo"
@@ -304,17 +399,37 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
                 placeholder="Ex: Carlos Henrique de Souza"
                 value={nomeCompleto}
                 onChange={handleNomeCompletoChange}
-                className={`w-full bg-natural-light border ${
-                  errors.nomeCompleto ? 'border-rose-400 focus:ring-rose-200 focus:border-rose-500' : 'border-natural-border focus:ring-natural-accent/30 focus:border-natural-primary'
-                } rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:ring-4 focus:bg-white transition-all`}
+                className={`w-full border ${
+                  errors.nomeCompleto || isNomeCompletoDuplicate
+                    ? 'border-rose-500 bg-rose-50/30 text-rose-900 focus:ring-rose-200 focus:border-rose-600'
+                    : 'bg-natural-light border-natural-border focus:ring-natural-accent/30 focus:border-natural-primary'
+                } rounded-lg px-3.5 py-2 text-sm transition-all focus:outline-hidden focus:ring-4 focus:bg-white`}
               />
+              {(isNomeCompletoDuplicate || errors.nomeCompleto) && (
+                <p className="text-xs text-rose-600 font-semibold flex items-center space-x-1.5 mt-1">
+                  <AlertTriangle size={13} className="shrink-0 text-rose-500" />
+                  <span>
+                    {isNomeCompletoDuplicate
+                      ? 'O nome digitado já pertence a outro colaborador ativo.'
+                      : errors.nomeCompleto}
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* Nome de Exibição */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-natural-text block flex items-center">
-                Nome de Exibição <span className="text-rose-500">*</span>
-                <span className="ml-1 text-[10px] font-medium text-natural-muted">(Como aparecerá nos crachás)</span>
+              <label className="text-xs font-bold text-natural-text block flex items-center justify-between">
+                <span className="flex items-center">
+                  Nome de Exibição <span className="text-rose-500">*</span>
+                  <span className="ml-1 text-[10px] font-medium text-natural-muted">(Crachá/UI)</span>
+                </span>
+                {isExibicaoDuplicate && (
+                  <span className="text-[11px] font-semibold text-rose-600 flex items-center space-x-1 animate-pulse">
+                    <AlertTriangle size={12} />
+                    <span>Nome de exibição já cadastrado!</span>
+                  </span>
+                )}
               </label>
               <input
                 id="input-exibicao"
@@ -323,18 +438,30 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
                 placeholder="Ex: Carlos Souza"
                 value={exibicao}
                 onChange={handleExibicaoChange}
-                className={`w-full bg-natural-light border ${
-                  errors.exibicao ? 'border-rose-400 focus:ring-rose-200 focus:border-rose-500' : 'border-natural-border focus:ring-natural-accent/30 focus:border-natural-primary'
-                } rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:ring-4 focus:bg-white transition-all`}
+                className={`w-full border ${
+                  errors.exibicao || isExibicaoDuplicate
+                    ? 'border-rose-500 bg-rose-50/30 text-rose-900 focus:ring-rose-200 focus:border-rose-600'
+                    : 'bg-natural-light border-natural-border focus:ring-natural-accent/30 focus:border-natural-primary'
+                } rounded-lg px-3.5 py-2 text-sm transition-all focus:outline-hidden focus:ring-4 focus:bg-white`}
               />
+              {(isExibicaoDuplicate || errors.exibicao) && (
+                <p className="text-xs text-rose-600 font-semibold flex items-center space-x-1.5 mt-1">
+                  <AlertTriangle size={13} className="shrink-0 text-rose-500" />
+                  <span>
+                    {isExibicaoDuplicate
+                      ? 'O nome de exibição digitado já pertence a outro colaborador ativo.'
+                      : errors.exibicao}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* CPF */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-natural-text block flex items-center justify-between">
-                <span>CPF <span className="text-rose-500">*</span></span>
+                <span>CPF <span className="text-xs font-normal text-natural-muted">(Opcional)</span></span>
                 {cpfValid !== null && (
                   <span className={`text-[10px] font-semibold ${cpfValid ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {cpfValid ? '✓ CPF Válido' : '✗ CPF Inválido'}
@@ -344,9 +471,8 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
               <input
                 id="input-cpf"
                 type="text"
-                required
                 maxLength={14}
-                placeholder="000.000.000-00"
+                placeholder="000.000.000-00 (Opcional)"
                 value={cpf}
                 onChange={handleCpfChange}
                 className={`w-full bg-natural-light border ${
@@ -358,18 +484,33 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
             {/* RG */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-natural-text block">
-                RG <span className="text-rose-500">*</span>
+                RG <span className="text-xs font-normal text-natural-muted">(Opcional)</span>
               </label>
               <input
                 id="input-rg"
                 type="text"
-                required
-                placeholder="00.000.000-0"
+                placeholder="00.000.000-0 (Opcional)"
                 value={rg}
                 onChange={handleRgChange}
                 className={`w-full bg-natural-light border ${
                   errors.rg ? 'border-rose-400 focus:ring-rose-200 focus:border-rose-500' : 'border-natural-border focus:ring-natural-accent/30 focus:border-natural-primary'
                 } rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:ring-4 focus:bg-white transition-all font-mono`}
+              />
+            </div>
+
+            {/* Matrícula */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-natural-text block">
+                Matrícula <span className="text-xs font-normal text-natural-muted">(Opcional)</span>
+              </label>
+              <input
+                id="input-matricula"
+                type="text"
+                maxLength={7}
+                placeholder="0000000 (Opcional)"
+                value={matricula}
+                onChange={(e) => setMatricula(e.target.value.slice(0, 7))}
+                className="w-full bg-natural-light border border-natural-border focus:ring-natural-accent/30 focus:border-natural-primary rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:ring-4 focus:bg-white transition-all font-mono"
               />
             </div>
 
@@ -428,7 +569,7 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
                 onChange={(e) => setSetor(e.target.value)}
                 className="w-full bg-natural-light border border-natural-border focus:ring-natural-accent/30 focus:ring-4 focus:border-natural-primary rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:bg-white transition-all"
               >
-                {SETORES.map((sec) => (
+                {Array.from(new Set([...SETORES, ...(setor ? [setor] : [])])).map((sec) => (
                   <option key={sec} value={sec}>
                     {sec}
                   </option>
@@ -468,7 +609,7 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
                 onChange={(e) => setFilial(e.target.value)}
                 className="w-full bg-natural-light border border-natural-border focus:ring-natural-accent/30 focus:ring-4 focus:border-natural-primary rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:bg-white transition-all"
               >
-                {(FILIAIS_BY_EMPRESA[empresa] || []).map((fil) => (
+                {filialOptions.map((fil) => (
                   <option key={fil} value={fil}>
                     {fil}
                   </option>
@@ -477,7 +618,7 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Data de Admissão */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-natural-text block">
@@ -524,20 +665,54 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel }:
                 </button>
               </div>
             </div>
+          </div>
 
-            {/* Placeholder / Telefone */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-natural-text block">
-                Telefone de Contato
+          {/* Telefone de Contato (Suporta múltiplas linhas com botão de adicionar) */}
+          <div className="space-y-2 bg-natural-light/50 p-3.5 rounded-xl border border-natural-border">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-natural-text flex items-center space-x-1.5">
+                <Phone size={14} className="text-natural-primary shrink-0" />
+                <span>Telefones de Contato / Celular</span>
               </label>
-              <input
-                id="input-telefone"
-                type="text"
-                placeholder="(11) 99999-9999"
-                value={telefone}
-                onChange={handleTelefoneChange}
-                className="w-full bg-natural-light border border-natural-border focus:ring-natural-accent/30 focus:ring-4 focus:border-natural-primary rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:bg-white transition-all font-mono"
-              />
+              <button
+                type="button"
+                id="add-telefone-line-btn"
+                onClick={handleAddTelefone}
+                className="inline-flex items-center space-x-1 text-xs font-semibold text-natural-primary hover:text-white bg-natural-accent/20 hover:bg-natural-primary border border-natural-accent/40 px-2.5 py-1 rounded-lg transition-all cursor-pointer shadow-2xs"
+              >
+                <Plus size={13} />
+                <span>Adicionar Telefone</span>
+              </button>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {telefones.map((tel, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <span className="text-[11px] font-semibold font-mono text-natural-muted w-14 shrink-0">
+                    Linha {index + 1}:
+                  </span>
+                  <input
+                    id={`input-telefone-${index}`}
+                    type="text"
+                    placeholder="(11) 99999-9999"
+                    value={tel}
+                    onChange={(e) => handleTelefoneChange(index, e.target.value)}
+                    className="flex-1 bg-natural-light border border-natural-border focus:ring-natural-accent/30 focus:ring-4 focus:border-natural-primary rounded-lg px-3.5 py-2 text-sm text-natural-text focus:outline-hidden focus:bg-white transition-all font-mono"
+                  />
+                  {telefones.length > 1 && (
+                    <button
+                      type="button"
+                      id={`remove-telefone-btn-${index}`}
+                      onClick={() => handleRemoveTelefone(index)}
+                      className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-natural-border hover:border-rose-200 transition-colors cursor-pointer shrink-0"
+                      title="Remover esta linha de telefone"
+                      aria-label="Remover esta linha de telefone"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 

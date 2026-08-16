@@ -68,6 +68,7 @@ CREATE TABLE \`colaboradores\` (
   \`exibicao\` VARCHAR(100) NOT NULL COMMENT 'Nome simplificado para exibição na UI',
   \`cpf\` VARCHAR(14) NOT NULL COMMENT 'CPF no formato XXX.XXX.XXX-XX',
   \`rg\` VARCHAR(20) DEFAULT NULL COMMENT 'Documento RG',
+  \`matricula\` VARCHAR(7) DEFAULT NULL COMMENT 'Código de matrícula de até 7 caracteres',
   \`data_nascimento\` DATE DEFAULT NULL COMMENT 'Data de nascimento',
   \`cargo\` VARCHAR(100) NOT NULL COMMENT 'Cargo ocupado na empresa',
   \`setor\` VARCHAR(100) NOT NULL COMMENT 'Setor ou departamento de trabalho',
@@ -244,11 +245,11 @@ ON DUPLICATE KEY UPDATE
 
 -- 2. Inserir Colaboradores
 INSERT INTO \`colaboradores\` (
-  \`id\`, \`nome_completo\`, \`exibicao\`, \`cpf\`, \`rg\`, \`data_nascimento\`, 
+  \`id\`, \`nome_completo\`, \`exibicao\`, \`cpf\`, \`rg\`, \`matricula\`, \`data_nascimento\`, 
   \`cargo\`, \`setor\`, \`email\`, \`telefone\`, \`data_admissao\`, \`status\`, 
   \`avatar_color\`, \`empresa\`, \`filial\`
 ) VALUES
-${colaboradores.map(c => `(${escapeSqlString(c.id)}, ${escapeSqlString(c.nomeCompleto)}, ${escapeSqlString(c.exibicao)}, ${escapeSqlString(c.cpf)}, ${escapeSqlString(c.rg)}, ${escapeSqlString(c.dataNascimento)}, ${escapeSqlString(c.cargo)}, ${escapeSqlString(c.setor)}, ${escapeSqlString(c.email)}, ${escapeSqlString(c.telefone)}, ${escapeSqlString(c.dataAdmissao)}, ${escapeSqlString(c.status)}, ${escapeSqlString(c.avatarColor)}, ${escapeSqlString(c.empresa)}, ${escapeSqlString(c.filial)})`).join(',\n')};
+${colaboradores.map(c => `(${escapeSqlString(c.id)}, ${escapeSqlString(c.nomeCompleto)}, ${escapeSqlString(c.exibicao)}, ${escapeSqlString(c.cpf)}, ${escapeSqlString(c.rg)}, ${escapeSqlString(c.matricula || null)}, ${escapeSqlString(c.dataNascimento)}, ${escapeSqlString(c.cargo)}, ${escapeSqlString(c.setor)}, ${escapeSqlString(c.email)}, ${escapeSqlString(c.telefone)}, ${escapeSqlString(c.dataAdmissao)}, ${escapeSqlString(c.status)}, ${escapeSqlString(c.avatarColor)}, ${escapeSqlString(c.empresa)}, ${escapeSqlString(c.filial)})`).join(',\n')};
 
 -- 3. Inserir Equipamentos
 INSERT INTO \`equipamentos\` (

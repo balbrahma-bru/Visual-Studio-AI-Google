@@ -34,6 +34,7 @@ import { Colaborador, Equipamento, ActiveTab, UserSettings, NotaFiscal } from '.
 import { INITIAL_COLABORADORES, INITIAL_EQUIPAMENTOS, INITIAL_NOTAS_FISCAIS } from './data';
 import NotaFiscalList from './components/NotaFiscalList';
 import DatabaseExportModal from './components/DatabaseExportModal';
+import Administracao from './components/Administracao';
 
 // Helper function to decode and validate custom JWT token claims (XSS & Expiry checks)
 function isTokenValid(token: string | null): boolean {
@@ -76,6 +77,13 @@ export default function App() {
   // ----------------------------------------------------
   const [colaboradores, setColaboradores] = useState<Colaborador[]>(() => {
     try {
+      // Clear legacy sample data as requested by user
+      const cleared = localStorage.getItem('colab_registry_cleared_v2');
+      if (!cleared) {
+        localStorage.removeItem('colab_registry_data');
+        localStorage.setItem('colab_registry_cleared_v2', 'true');
+        return [];
+      }
       const saved = localStorage.getItem('colab_registry_data');
       if (saved) return JSON.parse(saved);
     } catch (e) {
@@ -162,9 +170,35 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('colab_sidebar_collapsed') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [databaseModalOpen, setDatabaseModalOpen] = useState(false);
   const [colaboradorToEdit, setColaboradorToEdit] = useState<Colaborador | null>(null);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('colab_sidebar_collapsed', String(next));
+      } catch (e) {
+        console.error('Falha ao salvar preferência de sidebar', e);
+      }
+      return next;
+    });
+  };
+
+  // Persistent filter states for ColaboradorList
+  const [colabFilterSector, setColabFilterSector] = useState<string>('Todos');
+  const [colabFilterFilial, setColabFilterFilial] = useState<string>('Todos');
+  const [colabFilterStatus, setColabFilterStatus] = useState<string>('Ativo');
+  const [colabSortField, setColabSortField] = useState<'nomeCompleto' | 'cargo' | 'setor' | 'dataAdmissao' | 'filial'>('nomeCompleto');
+  const [colabSortOrder, setColabSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // ----------------------------------------------------
   // Custom Toasts / Alerts (No iframe-breaking windows)
@@ -473,10 +507,14 @@ export default function App() {
         }}
         isOpen={sidebarOpen}
         toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        isCollapsed={sidebarCollapsed}
+        toggleCollapse={toggleSidebarCollapsed}
       />
 
       {/* 2. Main Content Frame */}
-      <div className="flex-1 flex flex-col lg:pl-72 min-w-0">
+      <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out min-w-0 ${
+        sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'
+      }`}>
         
         {/* Top Header holding Search bar & user settings */}
         <Header
@@ -485,6 +523,8 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          isCollapsed={sidebarCollapsed}
+          toggleCollapse={toggleSidebarCollapsed}
           userSettings={userSettings}
           openSettings={() => setSettingsOpen(true)}
           openDatabaseModal={() => setDatabaseModalOpen(true)}
@@ -516,6 +556,16 @@ export default function App() {
                 <ColaboradorList
                   colaboradores={colaboradores}
                   searchQuery={searchQuery}
+                  selectedSector={colabFilterSector}
+                  setSelectedSector={setColabFilterSector}
+                  selectedFilial={colabFilterFilial}
+                  setSelectedFilial={setColabFilterFilial}
+                  selectedStatus={colabFilterStatus}
+                  setSelectedStatus={setColabFilterStatus}
+                  sortField={colabSortField}
+                  setSortField={setColabSortField}
+                  sortOrder={colabSortOrder}
+                  setSortOrder={setColabSortOrder}
                   onEdit={handleEditColaborador}
                   onDelete={handleTriggerDelete}
                   userSettings={userSettings}
@@ -531,6 +581,7 @@ export default function App() {
                   colaboradorToEdit={colaboradorToEdit}
                   onSave={handleSaveColaborador}
                   onCancel={handleCancelForm}
+                  colaboradores={colaboradores}
                 />
               )}
 
@@ -549,6 +600,22 @@ export default function App() {
                   notasFiscais={notasFiscais}
                   onSave={handleSaveNotaFiscal}
                   onDelete={handleDeleteNotaFiscal}
+                  userSettings={userSettings}
+                />
+              )}
+
+              {activeTab === 'administracao' && (
+                <Administracao
+                  colaboradores={colaboradores}
+                  onImportSuccess={(updatedList, summary) => {
+                    setColaboradores(updatedList);
+                    addToast(`Processamento concluído: ${summary.created} novos cadastros e ${summary.updated} atualizações.`, 'success');
+                  }}
+                  onClearAllColaboradores={() => {
+                    setColaboradores([]);
+                    localStorage.setItem('colab_registry_data', JSON.stringify([]));
+                    addToast('Todos os colaboradores foram removidos com sucesso. A base de dados está limpa para a nova importação.', 'info');
+                  }}
                   userSettings={userSettings}
                 />
               )}

@@ -4,6 +4,7 @@ export interface Colaborador {
   exibicao: string; // Nome de exibição ou apelido
   cpf: string;
   rg: string;
+  matricula?: string;
   dataNascimento: string;
   cargo: string;
   setor: string;
@@ -16,7 +17,7 @@ export interface Colaborador {
   filial?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'colaboradores' | 'cadastro' | 'equipamentos' | 'notas_fiscais';
+export type ActiveTab = 'dashboard' | 'colaboradores' | 'cadastro' | 'equipamentos' | 'notas_fiscais' | 'administracao';
 
 export interface NotaFiscalItem {
   id: string;

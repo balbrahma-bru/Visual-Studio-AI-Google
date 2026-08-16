@@ -16,7 +16,14 @@ import {
   UserPlus,
   ArrowUpDown,
   Filter,
-  Users
+  Users,
+  Building,
+  MapPin,
+  Activity,
+  ChevronDown,
+  RotateCcw,
+  Search,
+  X
 } from 'lucide-react';
 import { Colaborador } from '../types';
 import { SETORES, formatLocalDate } from '../data';
@@ -30,9 +37,19 @@ interface ColaboradorListProps {
   onDelete: (id: string) => void;
   userSettings: { empresa: string };
   onAddNew: () => void;
+  selectedSector?: string;
+  setSelectedSector?: (sector: string) => void;
+  selectedFilial?: string;
+  setSelectedFilial?: (filial: string) => void;
+  selectedStatus?: string;
+  setSelectedStatus?: (status: string) => void;
+  sortField?: SortField;
+  setSortField?: (field: SortField) => void;
+  sortOrder?: SortOrder;
+  setSortOrder?: (order: SortOrder) => void;
 }
 
-type SortField = 'nomeCompleto' | 'cargo' | 'setor' | 'dataAdmissao';
+type SortField = 'nomeCompleto' | 'cargo' | 'setor' | 'dataAdmissao' | 'filial';
 type SortOrder = 'asc' | 'desc';
 
 export default function ColaboradorList({
@@ -42,14 +59,94 @@ export default function ColaboradorList({
   onDelete,
   userSettings,
   onAddNew,
+  selectedSector: propSelectedSector,
+  setSelectedSector: propSetSelectedSector,
+  selectedFilial: propSelectedFilial,
+  setSelectedFilial: propSetSelectedFilial,
+  selectedStatus: propSelectedStatus,
+  setSelectedStatus: propSetSelectedStatus,
+  sortField: propSortField,
+  setSortField: propSetSortField,
+  sortOrder: propSortOrder,
+  setSortOrder: propSetSortOrder,
 }: ColaboradorListProps) {
-  // Filters state
-  const [selectedSector, setSelectedSector] = useState<string>('Todos');
-  const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
+  // Filters state (internal fallback)
+  const [internalSector, setInternalSector] = useState<string>('Todos');
+  const [internalFilial, setInternalFilial] = useState<string>('Todos');
+  const [internalStatus, setInternalStatus] = useState<string>('Ativo');
+
+  const selectedSector = propSelectedSector ?? internalSector;
+  const setSelectedSector = propSetSelectedSector ?? setInternalSector;
+
+  const selectedFilial = propSelectedFilial ?? internalFilial;
+  const setSelectedFilial = propSetSelectedFilial ?? setInternalFilial;
+
+  const selectedStatus = propSelectedStatus ?? internalStatus;
+  const setSelectedStatus = propSetSelectedStatus ?? setInternalStatus;
+
+  // Compute unique Sectors from colaboradores with status 'Ativo' ONLY
+  const ALL_SETORES = useMemo(() => {
+    const activeColabs = colaboradores.filter(
+      (c) => (c.status || '').trim().toLowerCase() === 'ativo'
+    );
+    const presentSectors = activeColabs
+      .map((c) => c.setor?.trim())
+      .filter(Boolean) as string[];
+    const set = new Set(presentSectors);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [colaboradores]);
+
+  // Compute unique Filiais from colaboradores with status 'Ativo' ONLY
+  const ALL_FILIAIS = useMemo(() => {
+    const activeColabs = colaboradores.filter(
+      (c) => (c.status || '').trim().toLowerCase() === 'ativo'
+    );
+    const presentFiliais = activeColabs
+      .map((c) => c.filial?.trim())
+      .filter(Boolean) as string[];
+    const set = new Set(presentFiliais);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [colaboradores]);
+
+  // Compute active sector counts
+  const sectorCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    colaboradores.forEach((c) => {
+      if ((c.status || '').trim().toLowerCase() === 'ativo' && c.setor) {
+        const sec = c.setor.trim();
+        map[sec] = (map[sec] || 0) + 1;
+      }
+    });
+    return map;
+  }, [colaboradores]);
+
+  // Compute active filial counts
+  const filialCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    colaboradores.forEach((c) => {
+      if ((c.status || '').trim().toLowerCase() === 'ativo' && c.filial) {
+        const fil = c.filial.trim();
+        map[fil] = (map[fil] || 0) + 1;
+      }
+    });
+    return map;
+  }, [colaboradores]);
+
+  // Local name filter inside Filtros Rápidos
+  const [nameFilter, setNameFilter] = useState('');
+
+  // Number of active filters
+  const activeFiltersCount = (nameFilter.trim() ? 1 : 0) + (selectedSector !== 'Todos' ? 1 : 0) + (selectedFilial !== 'Todos' ? 1 : 0) + (selectedStatus !== 'Todos' ? 1 : 0);
   
-  // Sorting state
-  const [sortField, setSortField] = useState<SortField>('nomeCompleto');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  // Sorting state (internal fallback)
+  const [internalSortField, setInternalSortField] = useState<SortField>('nomeCompleto');
+  const [internalSortOrder, setInternalSortOrder] = useState<SortOrder>('asc');
+
+  const sortField = propSortField ?? internalSortField;
+  const setSortField = propSetSortField ?? setInternalSortField;
+
+  const sortOrder = propSortOrder ?? internalSortOrder;
+  const setSortOrder = propSetSortOrder ?? setInternalSortOrder;
 
   // Detail Modal / Panel for single Colaborador
   const [activeDetailsColab, setActiveDetailsColab] = useState<Colaborador | null>(null);
@@ -58,15 +155,16 @@ export default function ColaboradorList({
   const filteredAndSortedColaboradores = useMemo(() => {
     let result = [...colaboradores];
 
-    // 1. Search Query Filter
+    // 1. Search Query Filter (Global Header)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
         (c) =>
           c.nomeCompleto.toLowerCase().includes(q) ||
           c.exibicao.toLowerCase().includes(q) ||
-          c.cpf.includes(q) ||
-          c.rg.includes(q) ||
+          (c.cpf && c.cpf.includes(q)) ||
+          (c.rg && c.rg.includes(q)) ||
+          (c.matricula && c.matricula.toLowerCase().includes(q)) ||
           c.cargo.toLowerCase().includes(q) ||
           c.setor.toLowerCase().includes(q) ||
           (c.empresa && c.empresa.toLowerCase().includes(q)) ||
@@ -74,14 +172,32 @@ export default function ColaboradorList({
       );
     }
 
+    // 1.5 Local Name Filter ("Localizar Colaborador" in Filtros Rápidos)
+    if (nameFilter.trim()) {
+      const nameQ = nameFilter.toLowerCase().trim();
+      result = result.filter(
+        (c) =>
+          c.nomeCompleto.toLowerCase().includes(nameQ) ||
+          c.exibicao.toLowerCase().includes(nameQ)
+      );
+    }
+
     // 2. Sector Filter
     if (selectedSector !== 'Todos') {
-      result = result.filter((c) => c.setor === selectedSector);
+      const targetSec = selectedSector.trim().toLowerCase();
+      result = result.filter((c) => (c.setor || '').trim().toLowerCase() === targetSec);
+    }
+
+    // 2.5 Filial Filter
+    if (selectedFilial !== 'Todos') {
+      const targetFilial = selectedFilial.trim().toLowerCase();
+      result = result.filter((c) => (c.filial || '').trim().toLowerCase() === targetFilial);
     }
 
     // 3. Status Filter
     if (selectedStatus !== 'Todos') {
-      result = result.filter((c) => c.status === selectedStatus);
+      const targetStatus = selectedStatus.trim().toLowerCase();
+      result = result.filter((c) => (c.status || '').trim().toLowerCase() === targetStatus);
     }
 
     // 4. Sorting
@@ -102,7 +218,7 @@ export default function ColaboradorList({
     });
 
     return result;
-  }, [colaboradores, searchQuery, selectedSector, selectedStatus, sortField, sortOrder]);
+  }, [colaboradores, searchQuery, nameFilter, selectedSector, selectedFilial, selectedStatus, sortField, sortOrder]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -142,14 +258,14 @@ export default function ColaboradorList({
     // Filter information banner
     doc.setTextColor(100, 116, 139); // dusty slate
     doc.setFontSize(9);
-    doc.text(`Filtros Aplicados - Setor: ${selectedSector} | Status: ${selectedStatus}`, 15, 48);
+    doc.text(`Filtros Aplicados - Setor: ${selectedSector} | Filial: ${selectedFilial} | Status: ${selectedStatus}`, 15, 48);
 
     // Prepare table data
     const tableHeaders = [['Nome Completo', 'CPF', 'RG', 'Cargo', 'Setor', 'Empresa / Filial', 'Admissão', 'Status']];
     const tableRows = filteredAndSortedColaboradores.map((c) => [
       c.nomeCompleto,
-      c.cpf,
-      c.rg,
+      c.cpf || '-',
+      c.rg || '-',
       c.cargo,
       c.setor,
       c.empresa && c.filial ? `${c.empresa} (${c.filial})` : '-',
@@ -397,62 +513,160 @@ export default function ColaboradorList({
 
       {/* Advanced Quick Filters Panel */}
       <div className="bg-white border border-natural-border rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
-        <div className="flex items-center space-x-2 text-natural-text font-bold text-xs uppercase tracking-wider">
-          <Filter size={14} className="text-natural-primary" />
-          <span>Filtros Rápidos</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-natural-text font-bold text-xs uppercase tracking-wider">
+            <Filter size={15} className="text-natural-primary" />
+            <span>Filtros Rápidos</span>
+            {activeFiltersCount > 0 && (
+              <span className="bg-natural-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-2xs">
+                {activeFiltersCount} {activeFiltersCount === 1 ? 'ativo' : 'ativos'}
+              </span>
+            )}
+          </div>
+
+          {activeFiltersCount > 0 && (
+            <button
+              id="btn-reset-quick-filters"
+              onClick={() => {
+                setNameFilter('');
+                setSelectedSector('Todos');
+                setSelectedFilial('Todos');
+                setSelectedStatus('Todos');
+              }}
+              className="text-[11px] font-semibold text-natural-primary hover:text-natural-hover flex items-center space-x-1.5 transition-colors cursor-pointer bg-natural-light hover:bg-natural-light-gray border border-natural-border px-2.5 py-1 rounded-lg"
+            >
+              <RotateCcw size={12} />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
         </div>
 
-        <div className="flex flex-wrap gap-4 items-center">
-          {/* Sector Selector */}
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-natural-muted uppercase tracking-widest block">Setor Corporativo</span>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                id="filter-sector-todos"
-                onClick={() => setSelectedSector('Todos')}
-                className={`py-1.5 px-3 rounded-full text-xs font-medium border transition-all cursor-pointer ${
-                  selectedSector === 'Todos'
-                    ? 'bg-natural-accent/30 border-natural-accent text-natural-primary font-semibold'
-                    : 'bg-natural-light border-natural-border text-natural-text hover:bg-natural-light-gray'
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Localizar Colaborador Input */}
+          <div className="space-y-1.5">
+            <label htmlFor="input-filter-nome" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
+              <Search size={13} className="text-natural-primary" />
+              <span>Localizar Colaborador</span>
+            </label>
+            <div className="relative">
+              <input
+                id="input-filter-nome"
+                type="text"
+                placeholder="Digite o nome..."
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                className={`w-full bg-natural-light border rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-natural-text transition-all focus:outline-hidden ${
+                  nameFilter.trim()
+                    ? 'border-natural-primary ring-2 ring-natural-accent/30 bg-natural-accent/10 font-semibold'
+                    : 'border-natural-border hover:border-natural-primary/50 focus:border-natural-primary focus:ring-2 focus:ring-natural-accent/20'
+                }`}
+              />
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-natural-muted">
+                <Search size={14} />
+              </div>
+              {nameFilter && (
+                <button
+                  type="button"
+                  id="btn-clear-name-filter"
+                  onClick={() => setNameFilter('')}
+                  className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-natural-muted hover:text-natural-text transition-colors cursor-pointer"
+                  title="Limpar busca de nome"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+          {/* Sector Listbox */}
+          <div className="space-y-1.5">
+            <label htmlFor="select-listbox-setor" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
+              <Building size={13} className="text-natural-primary" />
+              <span>Setor Corporativo (Ativos)</span>
+            </label>
+            <div className="relative">
+              <select
+                id="select-listbox-setor"
+                value={selectedSector}
+                onChange={(e) => setSelectedSector(e.target.value)}
+                className={`w-full appearance-none bg-natural-light border rounded-xl px-3.5 py-2.5 pr-9 text-xs font-medium text-natural-text transition-all focus:outline-hidden cursor-pointer ${
+                  selectedSector !== 'Todos'
+                    ? 'border-natural-primary ring-2 ring-natural-accent/30 bg-natural-accent/10 font-semibold'
+                    : 'border-natural-border hover:border-natural-primary/50 focus:border-natural-primary focus:ring-2 focus:ring-natural-accent/20'
                 }`}
               >
-                Todos Setores
-              </button>
-              {SETORES.map((sec) => (
-                <button
-                  key={sec}
-                  id={`filter-sector-${sec.toLowerCase()}`}
-                  onClick={() => setSelectedSector(sec)}
-                  className={`py-1.5 px-3 rounded-full text-xs font-medium border transition-all cursor-pointer ${
-                    selectedSector === sec
-                      ? 'bg-natural-accent/30 border-natural-accent text-natural-primary font-semibold'
-                      : 'bg-natural-light border-natural-border text-natural-text hover:bg-natural-light-gray'
-                  }`}
-                >
-                  {sec}
-                </button>
-              ))}
+                <option value="Todos">Todos os Setores ({ALL_SETORES.length})</option>
+                {ALL_SETORES.map((sec) => {
+                  const count = sectorCounts[sec] || 0;
+                  return (
+                    <option key={sec} value={sec}>
+                      {sec} {count > 0 ? `(${count})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-natural-muted">
+                <ChevronDown size={14} />
+              </div>
             </div>
           </div>
 
-          {/* Status Filter */}
-          <div className="space-y-1 min-w-[150px]">
-            <span className="text-[10px] font-bold text-natural-muted uppercase tracking-widest block">Status</span>
-            <div className="flex gap-1.5">
-              {['Todos', 'Ativo', 'Inativo'].map((st) => (
-                <button
-                  key={st}
-                  id={`filter-status-${st.toLowerCase()}`}
-                  onClick={() => setSelectedStatus(st)}
-                  className={`py-1.5 px-3 rounded-full text-xs font-medium border transition-all cursor-pointer flex-1 text-center ${
-                    selectedStatus === st
-                      ? 'bg-natural-accent/30 border-natural-accent text-natural-primary font-semibold'
-                      : 'bg-natural-light border-natural-border text-natural-text hover:bg-natural-light-gray'
-                  }`}
-                >
-                  {st}
-                </button>
-              ))}
+          {/* Filial Listbox */}
+          <div className="space-y-1.5">
+            <label htmlFor="select-listbox-filial" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
+              <MapPin size={13} className="text-natural-primary" />
+              <span>Unidade / Filial (Ativas)</span>
+            </label>
+            <div className="relative">
+              <select
+                id="select-listbox-filial"
+                value={selectedFilial}
+                onChange={(e) => setSelectedFilial(e.target.value)}
+                className={`w-full appearance-none bg-natural-light border rounded-xl px-3.5 py-2.5 pr-9 text-xs font-medium text-natural-text transition-all focus:outline-hidden cursor-pointer ${
+                  selectedFilial !== 'Todos'
+                    ? 'border-natural-primary ring-2 ring-natural-accent/30 bg-natural-accent/10 font-semibold'
+                    : 'border-natural-border hover:border-natural-primary/50 focus:border-natural-primary focus:ring-2 focus:ring-natural-accent/20'
+                }`}
+              >
+                <option value="Todos">Todas as Filiais ({ALL_FILIAIS.length})</option>
+                {ALL_FILIAIS.map((filial) => {
+                  const count = filialCounts[filial] || 0;
+                  return (
+                    <option key={filial} value={filial}>
+                      {filial} {count > 0 ? `(${count})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-natural-muted">
+                <ChevronDown size={14} />
+              </div>
+            </div>
+          </div>
+
+          {/* Status Listbox */}
+          <div className="space-y-1.5">
+            <label htmlFor="select-listbox-status" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
+              <Activity size={13} className="text-natural-primary" />
+              <span>Status do Cadastro</span>
+            </label>
+            <div className="relative">
+              <select
+                id="select-listbox-status"
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className={`w-full appearance-none bg-natural-light border rounded-xl px-3.5 py-2.5 pr-9 text-xs font-medium text-natural-text transition-all focus:outline-hidden cursor-pointer ${
+                  selectedStatus !== 'Todos'
+                    ? 'border-natural-primary ring-2 ring-natural-accent/30 bg-natural-accent/10 font-semibold'
+                    : 'border-natural-border hover:border-natural-primary/50 focus:border-natural-primary focus:ring-2 focus:ring-natural-accent/20'
+                }`}
+              >
+                <option value="Todos">Todos os Status</option>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-natural-muted">
+                <ChevronDown size={14} />
+              </div>
             </div>
           </div>
         </div>
@@ -463,9 +677,9 @@ export default function ColaboradorList({
         <span>
           Mostrando <span className="font-semibold text-natural-text">{filteredAndSortedColaboradores.length}</span> de <span className="font-semibold text-natural-text">{colaboradores.length}</span> cadastrados
         </span>
-        {searchQuery && (
+        {(searchQuery || nameFilter) && (
           <span>
-            Filtro de pesquisa ativo para: <span className="text-natural-primary font-semibold italic">"{searchQuery}"</span>
+            Filtro ativo: <span className="text-natural-primary font-semibold italic">"{nameFilter || searchQuery}"</span>
           </span>
         )}
       </div>
@@ -484,6 +698,7 @@ export default function ColaboradorList({
             id="clear-filters-btn"
             onClick={() => {
               setSelectedSector('Todos');
+              setSelectedFilial('Todos');
               setSelectedStatus('Todos');
             }}
             className="mt-4 bg-natural-light hover:bg-natural-light-gray border border-natural-border text-natural-text text-xs font-semibold py-2 px-4 rounded-full transition-colors cursor-pointer"
@@ -512,8 +727,13 @@ export default function ColaboradorList({
                         <ArrowUpDown size={12} className="text-natural-muted" />
                       </div>
                     </th>
-                    <th className="py-4 px-4">Documentos (CPF / RG)</th>
-                    <th className="py-4 px-4">Data Nasc.</th>
+                    <th className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors" onClick={() => handleSort('filial')}>
+                      <div className="flex items-center space-x-1">
+                        <span>Filial</span>
+                        <ArrowUpDown size={12} className="text-natural-muted" />
+                      </div>
+                    </th>
+                    <th className="py-4 px-4">Celular</th>
                     <th className="py-4 px-4">Status</th>
                     <th className="py-4 px-5 text-right">Ações</th>
                   </tr>
@@ -550,15 +770,29 @@ export default function ColaboradorList({
                         </span>
                       </td>
 
-                      {/* Credentials */}
-                      <td className="py-3.5 px-4 space-y-0.5 font-mono text-[11px] text-natural-muted">
-                        <div className="block"><span className="text-natural-muted font-sans">CPF:</span> {c.cpf}</div>
-                        <div className="block"><span className="text-natural-muted font-sans">RG:</span> {c.rg}</div>
+                      {/* Filial */}
+                      <td className="py-3.5 px-4">
+                        <span className="font-semibold text-natural-text">
+                          {c.filial || '-'}
+                        </span>
                       </td>
 
-                      {/* Birth Date */}
-                      <td className="py-3.5 px-4 text-natural-muted font-medium">
-                        {formatLocalDate(c.dataNascimento)}
+                      {/* Celular */}
+                      <td className="py-3.5 px-4 font-mono text-natural-text font-medium">
+                        {c.telefone ? (
+                          <div className="space-y-0.5">
+                            {c.telefone
+                              .split(/\s*(?:\/|,|\n)\s*/)
+                              .filter(Boolean)
+                              .map((tel, idx) => (
+                                <div key={idx} className="whitespace-nowrap">
+                                  {tel}
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          '-'
+                        )}
                       </td>
 
                       {/* Status */}
@@ -675,17 +909,30 @@ export default function ColaboradorList({
                     <span className="font-semibold text-natural-text block truncate">{c.cargo}</span>
                   </div>
                   <div>
-                    <span className="text-natural-muted block font-medium">Nascimento</span>
-                    <span className="font-semibold text-natural-text block">{formatLocalDate(c.dataNascimento)}</span>
+                    <span className="text-natural-muted block font-medium">Celular</span>
+                    <div className="font-mono font-semibold text-natural-text block leading-snug space-y-0.5 mt-0.5">
+                      {c.telefone ? (
+                        c.telefone
+                          .split(/\s*(?:\/|,|\n)\s*/)
+                          .filter(Boolean)
+                          .map((tel, idx) => (
+                            <div key={idx}>{tel}</div>
+                          ))
+                      ) : (
+                        '-'
+                      )}
+                    </div>
                   </div>
                   <div>
-                    <span className="text-natural-muted block font-medium">CPF</span>
-                    <span className="font-mono text-natural-text block">{c.cpf}</span>
+                    <span className="text-natural-muted block font-medium">Filial</span>
+                    <span className="font-semibold text-natural-text block truncate">{c.filial || '-'}</span>
                   </div>
-                  <div>
-                    <span className="text-natural-muted block font-medium">RG</span>
-                    <span className="font-mono text-natural-text block">{c.rg}</span>
-                  </div>
+                  {c.matricula && (
+                    <div>
+                      <span className="text-natural-muted block font-medium">Matrícula</span>
+                      <span className="font-mono text-natural-text block">{c.matricula}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer action buttons */}
@@ -782,8 +1029,14 @@ export default function ColaboradorList({
                   </div>
                   <div className="flex justify-between py-1 border-b border-natural-border">
                     <span className="text-natural-muted font-medium">RG:</span>
-                    <span className="font-mono font-semibold text-natural-text">{activeDetailsColab.rg}</span>
+                    <span className="font-mono font-semibold text-natural-text">{activeDetailsColab.rg || '-'}</span>
                   </div>
+                  {activeDetailsColab.matricula && (
+                    <div className="flex justify-between py-1 border-b border-natural-border">
+                      <span className="text-natural-muted font-medium">Matrícula:</span>
+                      <span className="font-mono font-semibold text-natural-text">{activeDetailsColab.matricula}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between py-1">
                     <span className="text-natural-muted font-medium">Nascimento:</span>
                     <span className="font-semibold text-natural-text">{formatLocalDate(activeDetailsColab.dataNascimento)}</span>
@@ -833,10 +1086,21 @@ export default function ColaboradorList({
                     <span className="text-natural-muted font-medium">E-mail:</span>
                     <span className="font-semibold text-natural-text truncate flex-1 text-right">{activeDetailsColab.email}</span>
                   </div>
-                  <div className="flex items-center space-x-2 text-natural-text py-0.5">
-                    <Phone size={13} className="text-natural-primary shrink-0" />
-                    <span className="text-natural-muted font-medium">Telefone:</span>
-                    <span className="font-semibold text-natural-text flex-1 text-right">{activeDetailsColab.telefone || 'Não informado'}</span>
+                  <div className="flex items-start space-x-2 text-natural-text py-0.5">
+                    <Phone size={13} className="text-natural-primary shrink-0 mt-0.5" />
+                    <span className="text-natural-muted font-medium">Telefone(s):</span>
+                    <div className="font-semibold text-natural-text flex-1 text-right space-y-0.5 font-mono">
+                      {activeDetailsColab.telefone ? (
+                        activeDetailsColab.telefone
+                          .split(/\s*(?:\/|,|\n)\s*/)
+                          .filter(Boolean)
+                          .map((tel, idx) => (
+                            <div key={idx}>{tel}</div>
+                          ))
+                      ) : (
+                        'Não informado'
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

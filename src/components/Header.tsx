@@ -8,6 +8,8 @@ interface HeaderProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   toggleSidebar: () => void;
+  isCollapsed?: boolean;
+  toggleCollapse?: () => void;
   userSettings: UserSettings;
   openSettings: () => void;
   openDatabaseModal?: () => void;
@@ -20,6 +22,8 @@ export default function Header({
   activeTab,
   setActiveTab,
   toggleSidebar,
+  isCollapsed,
+  toggleCollapse,
   userSettings,
   openSettings,
   openDatabaseModal,
@@ -57,10 +61,22 @@ export default function Header({
           id="toggle-sidebar-btn"
           onClick={toggleSidebar}
           className="p-2 -ml-2 rounded-lg text-natural-muted hover:bg-natural-light lg:hidden transition-colors"
-          aria-label="Toggle Sidebar"
+          aria-label="Toggle Sidebar Mobile"
         >
           <Menu size={20} />
         </button>
+
+        {toggleCollapse && (
+          <button
+            id="toggle-collapse-desktop-btn"
+            onClick={toggleCollapse}
+            className="hidden lg:flex p-2 -ml-2 rounded-lg text-natural-muted hover:bg-natural-light hover:text-natural-primary transition-colors cursor-pointer"
+            title={isCollapsed ? 'Expandir Menu Lateral' : 'Recolher Menu Lateral'}
+            aria-label="Toggle Sidebar Desktop"
+          >
+            <Menu size={20} />
+          </button>
+        )}
 
         {/* Global Search Bar */}
         <div className="relative w-full">
