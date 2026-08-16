@@ -1,5 +1,5 @@
-import { Colaborador, Equipamento, NotaFiscal, UserSettings } from '../types';
-import { INITIAL_COLABORADORES, INITIAL_EQUIPAMENTOS, INITIAL_NOTAS_FISCAIS } from '../data';
+import { Colaborador, Equipamento, NotaFiscal, UserSettings, EmpresaFilial } from '../types';
+import { INITIAL_COLABORADORES, INITIAL_EQUIPAMENTOS, INITIAL_NOTAS_FISCAIS, INITIAL_EMPRESAS_FILIAIS } from '../data';
 
 /**
  * Escapes strings safely for SQL insertion
@@ -21,7 +21,8 @@ export function generateMySQLScript(
   colaboradores: Colaborador[] = INITIAL_COLABORADORES,
   equipamentos: Equipamento[] = INITIAL_EQUIPAMENTOS as Equipamento[],
   notasFiscais: NotaFiscal[] = INITIAL_NOTAS_FISCAIS as NotaFiscal[],
-  userSettings?: UserSettings
+  userSettings?: UserSettings,
+  empresasFiliais: EmpresaFilial[] = INITIAL_EMPRESAS_FILIAIS as EmpresaFilial[]
 ): string {
   const dateStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -59,7 +60,51 @@ CREATE TABLE \`configuracoes_sistema\` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Configurações gerais do sistema';
 
 -- ------------------------------------------------------------------------------
--- 3. TABELA DE COLABORADORES
+-- 3. TABELA DE EMPRESAS E FILIAIS
+-- ------------------------------------------------------------------------------
+DROP TABLE IF EXISTS \`empresas_filiais\`;
+CREATE TABLE \`empresas_filiais\` (
+  \`id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+  \`id_empresa\` INT NOT NULL COMMENT 'Código identificador numérico da empresa/filial',
+  \`empresa\` VARCHAR(100) NOT NULL COMMENT 'Nome da empresa (ex: BIO BRANDS, BIO SCIENTIFIC)',
+  \`filial\` VARCHAR(100) NOT NULL COMMENT 'Nome da unidade/filial (ex: MATRIZ, ALPHAVILLE)',
+  \`razao_social\` VARCHAR(200) NOT NULL COMMENT 'Razão social completa',
+  \`nome_fantasia\` VARCHAR(200) DEFAULT NULL COMMENT 'Nome fantasia / Apelido da unidade',
+  \`cnpj\` VARCHAR(20) DEFAULT NULL COMMENT 'CNPJ formatado',
+  \`ie\` VARCHAR(50) DEFAULT NULL COMMENT 'Inscrição Estadual',
+  \`im\` VARCHAR(50) DEFAULT NULL COMMENT 'Inscrição Municipal',
+  \`cnae\` VARCHAR(150) DEFAULT NULL COMMENT 'CNAE principal',
+  \`regime_tributario\` VARCHAR(50) DEFAULT NULL COMMENT 'Regime tributário',
+  \`data_abertura\` DATE DEFAULT NULL COMMENT 'Data de fundação / abertura',
+  \`cep\` VARCHAR(10) DEFAULT NULL COMMENT 'CEP de localização',
+  \`logradouro\` VARCHAR(200) DEFAULT NULL COMMENT 'Rua, Avenida, etc.',
+  \`numero\` VARCHAR(20) DEFAULT NULL COMMENT 'Número predial',
+  \`complemento\` VARCHAR(100) DEFAULT NULL COMMENT 'Complemento, Bloco, Sala',
+  \`bairro\` VARCHAR(100) DEFAULT NULL COMMENT 'Bairro',
+  \`cidade\` VARCHAR(100) DEFAULT NULL COMMENT 'Cidade / Município',
+  \`uf\` VARCHAR(2) DEFAULT NULL COMMENT 'Unidade Federativa / Estado',
+  \`telefone\` VARCHAR(30) DEFAULT NULL COMMENT 'Telefone fixo / celular principal',
+  \`telefone_secundario\` VARCHAR(30) DEFAULT NULL COMMENT 'Telefone adicional',
+  \`email\` VARCHAR(150) DEFAULT NULL COMMENT 'E-mail institucional da filial',
+  \`responsavel\` VARCHAR(150) DEFAULT NULL COMMENT 'Nome do gerente / responsável',
+  \`cargo_responsavel\` VARCHAR(100) DEFAULT NULL COMMENT 'Cargo do responsável',
+  \`rede\` VARCHAR(50) DEFAULT NULL COMMENT 'Faixa de sub-rede IP (ex: 192.168.002.000/23)',
+  \`gateway\` VARCHAR(50) DEFAULT NULL COMMENT 'IP do Gateway padrão',
+  \`dns\` VARCHAR(100) DEFAULT NULL COMMENT 'Servidores DNS',
+  \`provedor_internet\` VARCHAR(100) DEFAULT NULL COMMENT 'Provedor de conexão de rede',
+  \`observacoes\` TEXT DEFAULT NULL COMMENT 'Anotações gerais e operacionais',
+  \`ativo\` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 para Ativo, 0 para Inativo',
+  \`data_desativacao\` DATE DEFAULT NULL COMMENT 'Data em que a unidade/filial foi desativada (Ativo = 0)',
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY \`idx_empresa_nome\` (\`empresa\`),
+  KEY \`idx_filial_nome\` (\`filial\`),
+  KEY \`idx_cidade_uf\` (\`cidade\`, \`uf\`),
+  KEY \`idx_rede_ip\` (\`rede\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Cadastro institucional de empresas, filiais, endereços e redes IP';
+
+-- ------------------------------------------------------------------------------
+-- 4. TABELA DE COLABORADORES
 -- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS \`colaboradores\`;
 CREATE TABLE \`colaboradores\` (
@@ -149,13 +194,16 @@ CREATE TABLE \`notas_fiscais\` (
   \`data_cadastro\` DATETIME NOT NULL COMMENT 'Data e hora de inserção no sistema',
   \`valor_total_nota\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Somatório total faturado',
   \`empresa\` ENUM('Bio Brands', 'Bio Scientific') NOT NULL COMMENT 'Empresa destinatária',
+  \`filial\` VARCHAR(100) DEFAULT NULL COMMENT 'Filial da empresa pagadora',
+  \`contrato\` VARCHAR(100) DEFAULT NULL COMMENT 'Número ou identificador do contrato',
   \`observacoes\` TEXT DEFAULT NULL COMMENT 'Comentários ou justificativas de compra',
   \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (\`id\`),
   KEY \`idx_nota_numero\` (\`numero\`),
   KEY \`idx_nota_data_emissao\` (\`data_emissao\` DESC),
-  KEY \`idx_nota_empresa\` (\`empresa\`)
+  KEY \`idx_nota_empresa\` (\`empresa\`),
+  KEY \`idx_nota_filial\` (\`filial\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Registro de notas fiscais de compra';
 
 -- ------------------------------------------------------------------------------
@@ -243,7 +291,17 @@ ON DUPLICATE KEY UPDATE
   \`empresa\` = VALUES(\`empresa\`),
   \`email\` = VALUES(\`email\`);
 
--- 2. Inserir Colaboradores
+-- 2. Inserir Empresas e Filiais
+INSERT INTO \`empresas_filiais\` (
+  \`id\`, \`id_empresa\`, \`empresa\`, \`filial\`, \`razao_social\`, \`nome_fantasia\`, 
+  \`cnpj\`, \`ie\`, \`im\`, \`cnae\`, \`regime_tributario\`, \`data_abertura\`,
+  \`cep\`, \`logradouro\`, \`numero\`, \`complemento\`, \`bairro\`, \`cidade\`, \`uf\`,
+  \`telefone\`, \`telefone_secundario\`, \`email\`, \`responsavel\`, \`cargo_responsavel\`,
+  \`rede\`, \`gateway\`, \`dns\`, \`provedor_internet\`, \`observacoes\`, \`ativo\`, \`data_desativacao\`
+) VALUES
+${empresasFiliais.map(f => `(${escapeSqlString(f.id)}, ${f.idEmpresa}, ${escapeSqlString(f.empresa)}, ${escapeSqlString(f.filial)}, ${escapeSqlString(f.razaoSocial)}, ${escapeSqlString(f.nomeFantasia || null)}, ${escapeSqlString(f.cnpj || null)}, ${escapeSqlString(f.ie || null)}, ${escapeSqlString(f.im || null)}, ${escapeSqlString(f.cnae || null)}, ${escapeSqlString(f.regimeTributario || null)}, ${escapeSqlString(f.dataAbertura || null)}, ${escapeSqlString(f.cep || null)}, ${escapeSqlString(f.logradouro || null)}, ${escapeSqlString(f.numero || null)}, ${escapeSqlString(f.complemento || null)}, ${escapeSqlString(f.bairro || null)}, ${escapeSqlString(f.cidade || null)}, ${escapeSqlString(f.uf || null)}, ${escapeSqlString(f.telefone || null)}, ${escapeSqlString(f.telefoneSecundario || null)}, ${escapeSqlString(f.email || null)}, ${escapeSqlString(f.responsavel || null)}, ${escapeSqlString(f.cargoResponsavel || null)}, ${escapeSqlString(f.rede || null)}, ${escapeSqlString(f.gateway || null)}, ${escapeSqlString(f.dns || null)}, ${escapeSqlString(f.provedorInternet || null)}, ${escapeSqlString(f.observacoes || null)}, ${f.ativo ? 1 : 0}, ${escapeSqlString(f.dataDesativacao || null)})`).join(',\n')};
+
+-- 3. Inserir Colaboradores
 INSERT INTO \`colaboradores\` (
   \`id\`, \`nome_completo\`, \`exibicao\`, \`cpf\`, \`rg\`, \`matricula\`, \`data_nascimento\`, 
   \`cargo\`, \`setor\`, \`email\`, \`telefone\`, \`data_admissao\`, \`status\`, 
@@ -266,11 +324,11 @@ ${equipamentos.filter(e => e.historico && e.historico.length > 0).flatMap(e => e
 
 -- 5. Inserir Notas Fiscais
 INSERT INTO \`notas_fiscais\` (
-  \`id\`, \`numero\`, \`emissor\`, \`data_emissao\`, \`data_cadastro\`, \`valor_total_nota\`, \`empresa\`, \`observacoes\`
+  \`id\`, \`numero\`, \`emissor\`, \`data_emissao\`, \`data_cadastro\`, \`valor_total_nota\`, \`empresa\`, \`filial\`, \`contrato\`, \`observacoes\`
 ) VALUES
 ${notasFiscais.map(nf => {
   const cadastroIso = nf.dataCadastro ? nf.dataCadastro.replace('T', ' ').replace('Z', '').split('.')[0] : dateStr;
-  return `(${escapeSqlString(nf.id)}, ${escapeSqlString(nf.numero)}, ${escapeSqlString(nf.emissor)}, ${escapeSqlString(nf.dataEmissao)}, ${escapeSqlString(cadastroIso)}, ${nf.valorTotalNota}, ${escapeSqlString(nf.empresa)}, ${escapeSqlString(nf.observacoes)})`;
+  return `(${escapeSqlString(nf.id)}, ${escapeSqlString(nf.numero)}, ${escapeSqlString(nf.emissor)}, ${escapeSqlString(nf.dataEmissao)}, ${escapeSqlString(cadastroIso)}, ${nf.valorTotalNota}, ${escapeSqlString(nf.empresa)}, ${escapeSqlString(nf.filial || null)}, ${escapeSqlString(nf.contrato || null)}, ${escapeSqlString(nf.observacoes)})`;
 }).join(',\n')};
 
 -- 6. Inserir Itens das Notas Fiscais
@@ -309,9 +367,10 @@ export function downloadMySQLFile(
   colaboradores?: Colaborador[],
   equipamentos?: Equipamento[],
   notasFiscais?: NotaFiscal[],
-  userSettings?: UserSettings
+  userSettings?: UserSettings,
+  empresasFiliais?: EmpresaFilial[]
 ) {
-  const sqlContent = generateMySQLScript(colaboradores, equipamentos, notasFiscais, userSettings);
+  const sqlContent = generateMySQLScript(colaboradores, equipamentos, notasFiscais, userSettings, empresasFiliais);
   const blob = new Blob([sqlContent], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   

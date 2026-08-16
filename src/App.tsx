@@ -30,9 +30,10 @@ import ColaboradorList from './components/ColaboradorList';
 import EquipamentoList from './components/EquipamentoList';
 import SettingsModal from './components/SettingsModal';
 import LoginPage from './components/LoginPage';
-import { Colaborador, Equipamento, ActiveTab, UserSettings, NotaFiscal } from './types';
-import { INITIAL_COLABORADORES, INITIAL_EQUIPAMENTOS, INITIAL_NOTAS_FISCAIS } from './data';
+import { Colaborador, Equipamento, ActiveTab, UserSettings, NotaFiscal, EmpresaFilial } from './types';
+import { INITIAL_COLABORADORES, INITIAL_EQUIPAMENTOS, INITIAL_NOTAS_FISCAIS, INITIAL_EMPRESAS_FILIAIS } from './data';
 import NotaFiscalList from './components/NotaFiscalList';
+import EmpresaFiliaisList from './components/EmpresaFiliaisList';
 import DatabaseExportModal from './components/DatabaseExportModal';
 import Administracao from './components/Administracao';
 
@@ -127,6 +128,16 @@ export default function App() {
     return INITIAL_NOTAS_FISCAIS;
   });
 
+  const [empresasFiliais, setEmpresasFiliais] = useState<EmpresaFilial[]>(() => {
+    try {
+      const saved = localStorage.getItem('colab_registry_empresas_filiais');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Falha ao ler empresas e filiais do localStorage', e);
+    }
+    return INITIAL_EMPRESAS_FILIAIS;
+  });
+
   // Save changes to localStorage
   useEffect(() => {
     localStorage.setItem('colab_registry_data', JSON.stringify(colaboradores));
@@ -143,6 +154,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('colab_registry_notas_fiscais', JSON.stringify(notasFiscais));
   }, [notasFiscais]);
+
+  useEffect(() => {
+    localStorage.setItem('colab_registry_empresas_filiais', JSON.stringify(empresasFiliais));
+  }, [empresasFiliais]);
 
   // Synchronize token state to localStorage
   useEffect(() => {
@@ -392,6 +407,28 @@ export default function App() {
     }
   };
 
+  // Save or update Empresa / Filial
+  const handleSaveEmpresaFilial = (filial: EmpresaFilial) => {
+    const exists = empresasFiliais.some(f => f.id === filial.id);
+    if (exists) {
+      setEmpresasFiliais(prev => prev.map(f => f.id === filial.id ? filial : f));
+      addToast(`Filial ${filial.filial} (${filial.empresa}) atualizada com sucesso!`, 'success');
+    } else {
+      setEmpresasFiliais(prev => [filial, ...prev]);
+      addToast(`Filial ${filial.filial} (${filial.empresa}) cadastrada com sucesso!`, 'success');
+    }
+  };
+
+  // Delete (Desativar) Empresa / Filial: Atualiza Ativo para 0 e registra a Data de Desativação
+  const handleDeleteEmpresaFilial = (id: string) => {
+    const item = empresasFiliais.find(f => f.id === id);
+    if (item) {
+      const today = new Date().toISOString().split('T')[0];
+      setEmpresasFiliais(prev => prev.map(f => f.id === id ? { ...f, ativo: false, dataDesativacao: today } : f));
+      addToast(`Filial ${item.filial} (${item.empresa}) desativada com sucesso (Ativo: 0)!`, 'info');
+    }
+  };
+
   // Switch to edit mode
   const handleEditColaborador = (colaborador: Colaborador) => {
     setColaboradorToEdit(colaborador);
@@ -552,6 +589,16 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'empresa_filial' && (
+                <EmpresaFiliaisList
+                  empresasFiliais={empresasFiliais}
+                  searchQuery={searchQuery}
+                  onSave={handleSaveEmpresaFilial}
+                  onDelete={handleDeleteEmpresaFilial}
+                  userSettings={userSettings}
+                />
+              )}
+
               {activeTab === 'colaboradores' && (
                 <ColaboradorList
                   colaboradores={colaboradores}
@@ -582,6 +629,7 @@ export default function App() {
                   onSave={handleSaveColaborador}
                   onCancel={handleCancelForm}
                   colaboradores={colaboradores}
+                  empresasFiliais={empresasFiliais}
                 />
               )}
 
@@ -598,6 +646,7 @@ export default function App() {
               {activeTab === 'notas_fiscais' && (
                 <NotaFiscalList
                   notasFiscais={notasFiscais}
+                  empresasFiliais={empresasFiliais}
                   onSave={handleSaveNotaFiscal}
                   onDelete={handleDeleteNotaFiscal}
                   userSettings={userSettings}
@@ -647,6 +696,7 @@ export default function App() {
           colaboradores={colaboradores}
           equipamentos={equipamentos}
           notasFiscais={notasFiscais}
+          empresasFiliais={empresasFiliais}
           userSettings={userSettings}
           onClose={() => setDatabaseModalOpen(false)}
         />

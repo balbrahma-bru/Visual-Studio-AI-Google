@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Building2
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -38,6 +39,12 @@ export default function Sidebar({
       label: 'Painel Geral',
       icon: LayoutDashboard,
       description: 'Estatísticas e visão geral da equipe'
+    },
+    {
+      id: 'empresa_filial' as ActiveTab,
+      label: 'Empresa / Filial',
+      icon: Building2,
+      description: 'Filiais, razões sociais, CNPJ e redes'
     },
     {
       id: 'colaboradores' as ActiveTab,

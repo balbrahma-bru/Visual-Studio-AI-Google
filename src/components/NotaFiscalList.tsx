@@ -22,22 +22,76 @@ import {
   Percent,
   FileSpreadsheet,
   Pencil,
-  ArrowDown
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Copy,
+  SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { NotaFiscal, NotaFiscalItem, NotaFiscalAnexo, UserSettings } from '../types';
+import { NotaFiscal, NotaFiscalItem, NotaFiscalAnexo, UserSettings, EmpresaFilial } from '../types';
+import { FILIAIS_BY_EMPRESA } from '../data';
+
+type NFSortField = 'dataEmissao' | 'numero' | 'empresa' | 'filial' | 'emissor' | 'valorTotalNota';
+type NFSortOrder = 'asc' | 'desc';
 
 interface NotaFiscalListProps {
   notasFiscais: NotaFiscal[];
+  empresasFiliais?: EmpresaFilial[];
   onSave: (nota: NotaFiscal) => void;
   onDelete: (id: string) => void;
   userSettings: UserSettings;
 }
 
-export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSettings }: NotaFiscalListProps) {
+export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, onDelete, userSettings }: NotaFiscalListProps) {
   // State for search and filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('All');
+  const [selectedFilialFilter, setSelectedFilialFilter] = useState<string>('All');
+
+  // Sorting state (default to dataEmissao descending)
+  const [sortField, setSortField] = useState<NFSortField>('dataEmissao');
+  const [sortOrder, setSortOrder] = useState<NFSortOrder>('desc');
+
+  // Handle column header sort toggle
+  const handleSort = (field: NFSortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      if (field === 'dataEmissao' || field === 'valorTotalNota') {
+        setSortOrder('desc');
+      } else {
+        setSortOrder('asc');
+      }
+    }
+  };
+
+  // Helper to extract active filiais (ativo = 1 / true) belonging to the specified Empresa
+  const getFiliaisForEmpresa = (targetEmpresa: 'Bio Brands' | 'Bio Scientific', list?: EmpresaFilial[]): string[] => {
+    if (list && list.length > 0) {
+      const normTarget = targetEmpresa.trim().toLowerCase().replace(/\s+/g, '');
+      const filtered = list.filter(ef => {
+        const normEmp = (ef.empresa || '').trim().toLowerCase().replace(/\s+/g, '');
+        const isAtivo = ef.ativo === true; // Somente filiais ativas (ativo = 1)
+        return normEmp === normTarget && isAtivo;
+      });
+
+      const uniqueFiliais = Array.from(
+        new Set(
+          filtered
+            .map(ef => ef.filial?.trim())
+            .filter((f): f is string => Boolean(f))
+        )
+      ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+      if (uniqueFiliais.length > 0) {
+        return uniqueFiliais;
+      }
+    }
+
+    return FILIAIS_BY_EMPRESA[targetEmpresa] || [];
+  };
 
   // Modal and details view states
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -50,6 +104,8 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
   const [emissor, setEmissor] = useState('');
   const [dataEmissao, setDataEmissao] = useState('');
   const [empresa, setEmpresa] = useState<'Bio Brands' | 'Bio Scientific'>('Bio Brands');
+  const [filial, setFilial] = useState('ALPHAVILLE');
+  const [contrato, setContrato] = useState('');
   const [observacoes, setObservacoes] = useState('');
   
   // File attachments state
@@ -58,6 +114,23 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
   
   // Current items being added/edited in the invoice
   const [itens, setItens] = useState<NotaFiscalItem[]>([]);
+
+  // Compute available Filiais strictly according to the selected Empresa and Empresa/Filiais registry
+  const filialOptions = useMemo(() => {
+    return getFiliaisForEmpresa(empresa, empresasFiliais);
+  }, [empresa, empresasFiliais]);
+
+  // Handle Empresa change with auto-selection of appropriate Filial
+  const handleEmpresaChange = (newEmpresa: 'Bio Brands' | 'Bio Scientific') => {
+    setEmpresa(newEmpresa);
+    const available = getFiliaisForEmpresa(newEmpresa, empresasFiliais);
+    const matched = available.find(f => f.trim().toLowerCase() === filial.trim().toLowerCase());
+    if (matched) {
+      setFilial(matched);
+    } else {
+      setFilial(available[0] || '');
+    }
+  };
   
   // Temporary fields for adding a single item
   const [tempDescricao, setTempDescricao] = useState('');
@@ -126,6 +199,10 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
       setEmissor(nota.emissor);
       setDataEmissao(nota.dataEmissao);
       setEmpresa(nota.empresa);
+      const available = getFiliaisForEmpresa(nota.empresa, empresasFiliais);
+      const matched = available.find(f => f.trim().toLowerCase() === (nota.filial || '').trim().toLowerCase());
+      setFilial(matched || nota.filial || available[0] || '');
+      setContrato(nota.contrato || '');
       setObservacoes(nota.observacoes || '');
       setNotaFiscalFile(nota.notaFiscalFile || null);
       setOutrosArquivos(nota.outrosArquivos || []);
@@ -136,12 +213,45 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
       setEmissor('');
       setDataEmissao(new Date().toISOString().split('T')[0]);
       setEmpresa('Bio Brands');
+      const available = getFiliaisForEmpresa('Bio Brands', empresasFiliais);
+      setFilial(available[0] || 'ALPHAVILLE');
+      setContrato('');
       setObservacoes('');
       setNotaFiscalFile(null);
       setOutrosArquivos([]);
       setItens([]);
     }
     
+    // Clear temp item
+    setTempDescricao('');
+    setTempQuantidade(1);
+    setTempValorUnitario(0);
+    setTempValorUnitarioStr('R$ 0,00');
+    setFormError('');
+    setIsFormOpen(true);
+  };
+
+  // Handle duplicating an existing invoice into a new record with null number and attachments
+  const handleDuplicateNota = (nota: NotaFiscal) => {
+    setEditingNota(null);
+    setNumero(''); // Número fica Null / Vazio para o novo registro
+    setEmissor(nota.emissor || '');
+    setDataEmissao(nota.dataEmissao || new Date().toISOString().split('T')[0]);
+    setEmpresa(nota.empresa);
+    const available = getFiliaisForEmpresa(nota.empresa, empresasFiliais);
+    const matched = available.find(f => f.trim().toLowerCase() === (nota.filial || '').trim().toLowerCase());
+    setFilial(matched || nota.filial || available[0] || '');
+    setContrato(nota.contrato || '');
+    setObservacoes(nota.observacoes || '');
+    setNotaFiscalFile(null); // Anexos ficam Null
+    setOutrosArquivos([]); // Anexos adicionais ficam Null / Vazios
+    setItens(
+      (nota.itens || []).map((item, idx) => ({
+        ...item,
+        id: `item-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`
+      }))
+    );
+
     // Clear temp item
     setTempDescricao('');
     setTempQuantidade(1);
@@ -318,6 +428,8 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
       dataCadastro: editingNota ? editingNota.dataCadastro : new Date().toISOString(),
       valorTotalNota: Number(computedTotalNota.toFixed(2)),
       empresa,
+      filial: filial || filialOptions[0] || '',
+      contrato: contrato.trim(),
       itens,
       notaFiscalFile,
       outrosArquivos,
@@ -339,6 +451,25 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
     }
   };
 
+  // Available filiais for filter bar
+  const availableFilterFiliais = useMemo(() => {
+    if (selectedEmpresa !== 'All') {
+      return getFiliaisForEmpresa(selectedEmpresa as 'Bio Brands' | 'Bio Scientific', empresasFiliais);
+    }
+    if (empresasFiliais && empresasFiliais.length > 0) {
+      const list = Array.from(
+        new Set(
+          empresasFiliais
+            .filter(ef => ef.ativo === true)
+            .map(ef => ef.filial?.trim())
+            .filter((f): f is string => Boolean(f))
+        )
+      ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      if (list.length > 0) return list;
+    }
+    return Array.from(new Set(notasFiscais.map(n => n.filial).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [selectedEmpresa, empresasFiliais, notasFiscais]);
+
   // Filter and search invoices
   const filteredNotas = useMemo(() => {
     return notasFiscais
@@ -349,23 +480,56 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
           nf.numero.toLowerCase().includes(query) ||
           cleanNumeroNF(nf.numero).toLowerCase().includes(query) ||
           nf.emissor.toLowerCase().includes(query) ||
-          (nf.observacoes && nf.observacoes.toLowerCase().includes(query));
+          (nf.filial && nf.filial.toLowerCase().includes(query)) ||
+          (nf.contrato && nf.contrato.toLowerCase().includes(query)) ||
+          (nf.observacoes && nf.observacoes.toLowerCase().includes(query)) ||
+          (nf.itens && nf.itens.some(item => item.descricao.toLowerCase().includes(query)));
 
         // 2. Company Filter
         const matchesEmpresa = selectedEmpresa === 'All' || nf.empresa === selectedEmpresa;
 
-        return matchesSearch && matchesEmpresa;
+        // 3. Filial Filter
+        const matchesFilial = selectedFilialFilter === 'All' || (nf.filial || '').trim().toLowerCase() === selectedFilialFilter.trim().toLowerCase();
+
+        return matchesSearch && matchesEmpresa && matchesFilial;
       })
       .sort((a, b) => {
-        // Sort by dataEmissao descending (most recent date first)
-        const timeA = new Date(a.dataEmissao).getTime() || 0;
-        const timeB = new Date(b.dataEmissao).getTime() || 0;
-        if (timeB !== timeA) {
-          return timeB - timeA;
+        let comparison = 0;
+
+        if (sortField === 'dataEmissao') {
+          const valA = (a.dataEmissao || '').trim();
+          const valB = (b.dataEmissao || '').trim();
+          comparison = valA.localeCompare(valB);
+        } else if (sortField === 'numero') {
+          const cleanA = cleanNumeroNF(a.numero);
+          const cleanB = cleanNumeroNF(b.numero);
+          const numA = parseInt(cleanA, 10);
+          const numB = parseInt(cleanB, 10);
+          if (!isNaN(numA) && !isNaN(numB)) {
+            comparison = numA - numB;
+          } else {
+            comparison = (a.numero || '').localeCompare(b.numero || '', 'pt-BR', { numeric: true, sensitivity: 'base' });
+          }
+        } else if (sortField === 'empresa') {
+          comparison = (a.empresa || '').localeCompare(b.empresa || '', 'pt-BR', { sensitivity: 'base' });
+        } else if (sortField === 'filial') {
+          comparison = (a.filial || '').localeCompare(b.filial || '', 'pt-BR', { sensitivity: 'base' });
+        } else if (sortField === 'emissor') {
+          comparison = (a.emissor || '').localeCompare(b.emissor || '', 'pt-BR', { sensitivity: 'base' });
+        } else if (sortField === 'valorTotalNota') {
+          comparison = (a.valorTotalNota || 0) - (b.valorTotalNota || 0);
         }
-        return new Date(b.dataCadastro).getTime() - new Date(a.dataCadastro).getTime();
+
+        // Secondary deterministic fallback
+        if (comparison === 0) {
+          const dateA = (a.dataEmissao || a.dataCadastro || '');
+          const dateB = (b.dataEmissao || b.dataCadastro || '');
+          return dateB.localeCompare(dateA);
+        }
+
+        return sortOrder === 'asc' ? comparison : -comparison;
       });
-  }, [notasFiscais, searchQuery, selectedEmpresa]);
+  }, [notasFiscais, searchQuery, selectedEmpresa, selectedFilialFilter, sortField, sortOrder]);
 
   // Total summary of filtered invoices
   const stats = useMemo(() => {
@@ -531,19 +695,19 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-slate-50 text-natural-muted font-mono border-b border-natural-border font-semibold uppercase tracking-wider text-[10px]">
               <tr>
-                <th className="px-4 py-3.5">Número</th>
-                <th className="px-4 py-3.5">Empresa</th>
-                <th className="px-4 py-3.5">Emissor / Fornecedor</th>
                 <th className="px-4 py-3.5">
                   <div className="flex items-center space-x-1" title="Ordenado da nota mais recente para a mais antiga">
                     <span>Data Emissão</span>
                     <ArrowDown size={12} className="text-indigo-600" />
                   </div>
                 </th>
-                <th className="px-4 py-3.5 text-center">Itens</th>
+                <th className="px-4 py-3.5">Número</th>
+                <th className="px-4 py-3.5">Empresa</th>
+                <th className="px-4 py-3.5">Filial</th>
+                <th className="px-4 py-3.5">Emissor / Fornecedor</th>
                 <th className="px-4 py-3.5">Anexos</th>
                 <th className="px-4 py-3.5 text-right">Valor Total</th>
-                <th className="px-4 py-3.5 text-center w-36">Ações</th>
+                <th className="px-4 py-3.5 text-center min-w-[210px]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-sans">
@@ -568,6 +732,11 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
                       exit={{ opacity: 0 }}
                       className="hover:bg-slate-50/70 transition-colors"
                     >
+                      {/* Data Emissão */}
+                      <td className="px-4 py-3.5 whitespace-nowrap font-mono font-medium text-slate-700">
+                        {formatDateBR(nf.dataEmissao)}
+                      </td>
+
                       {/* Número */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <span className="font-mono bg-slate-100 border border-slate-200 font-bold px-2 py-0.5 rounded text-slate-700 text-[11px]">
@@ -577,33 +746,38 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
 
                       {/* Empresa */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span
-                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border inline-block ${
-                            nf.empresa === 'Bio Brands'
-                              ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
-                              : 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                          }`}
-                        >
-                          {nf.empresa}
-                        </span>
+                        <div className="space-y-1">
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border inline-block ${
+                              nf.empresa === 'Bio Brands'
+                                ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
+                                : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                            }`}
+                          >
+                            {nf.empresa}
+                          </span>
+                          {nf.contrato && (
+                            <div className="text-[10px] font-mono text-indigo-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 inline-block" title={nf.contrato}>
+                              {nf.contrato}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Filial */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Building size={13} className="text-slate-400 shrink-0" />
+                          <span className="text-xs font-bold text-natural-text uppercase tracking-tight" title={nf.filial}>
+                            {nf.filial || '-'}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Emissor */}
                       <td className="px-4 py-3.5">
                         <span className="font-semibold text-natural-text block truncate max-w-[200px]" title={nf.emissor}>
                           {nf.emissor}
-                        </span>
-                      </td>
-
-                      {/* Data Emissão */}
-                      <td className="px-4 py-3.5 whitespace-nowrap font-mono text-natural-muted">
-                        {formatDateBR(nf.dataEmissao)}
-                      </td>
-
-                      {/* Qtd Itens */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap font-mono">
-                        <span className="bg-slate-100 text-natural-text font-bold px-2 py-0.5 rounded-full text-[11px]">
-                          {nf.itens.length} {nf.itens.length === 1 ? 'item' : 'itens'}
                         </span>
                       </td>
 
@@ -641,6 +815,15 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
                           >
                             <Eye size={13} />
                             <span>Visualizar</span>
+                          </button>
+                          <button
+                            id={`btn-duplicate-nf-${nf.id}`}
+                            onClick={() => handleDuplicateNota(nf)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            title="Duplicar Nota Fiscal (Criar novo registro com Número e Anexos em branco)"
+                          >
+                            <Copy size={13} />
+                            <span>Duplicar</span>
                           </button>
                           <button
                             id={`btn-edit-nf-${nf.id}`}
@@ -724,17 +907,21 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
               {/* Scrollable details content */}
               <div className="p-6 overflow-y-auto space-y-6 flex-1">
                 {/* Quick Summary Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
-                  <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs font-mono">
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
                     <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Data Emissão</span>
                     <span className="text-natural-text font-bold block">{formatDateBR(selectedNotaForDetails.dataEmissao)}</span>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1">
-                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Data Cadastro Sistema</span>
-                    <span className="text-natural-text font-bold block">{new Date(selectedNotaForDetails.dataCadastro).toLocaleString('pt-BR')}</span>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Filial Vinculada</span>
+                    <span className="text-natural-text font-bold block truncate">{selectedNotaForDetails.filial || 'Não informada'}</span>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1">
-                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold text-indigo-600">Valor Total Geral</span>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Nº Contrato</span>
+                    <span className="text-indigo-600 font-bold block truncate">{selectedNotaForDetails.contrato || 'Sem contrato'}</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold text-indigo-600">Valor Total</span>
                     <span className="text-natural-text font-bold block text-sm text-indigo-600">{formatCurrency(selectedNotaForDetails.valorTotalNota)}</span>
                   </div>
                 </div>
@@ -846,7 +1033,19 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
               </div>
 
               {/* Modal footer */}
-              <div className="bg-slate-50 px-6 py-3.5 border-t border-natural-border flex items-center justify-end shrink-0">
+              <div className="bg-slate-50 px-6 py-3.5 border-t border-natural-border flex items-center justify-end space-x-2 shrink-0">
+                <button
+                  id="btn-duplicate-from-details"
+                  onClick={() => {
+                    const nota = selectedNotaForDetails;
+                    setSelectedNotaForDetails(null);
+                    handleDuplicateNota(nota);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold hover:bg-emerald-100 transition-colors cursor-pointer"
+                >
+                  <Copy size={13} />
+                  <span>Duplicar Nota</span>
+                </button>
                 <button
                   id="btn-close-details-footer"
                   onClick={() => setSelectedNotaForDetails(null)}
@@ -955,53 +1154,98 @@ export default function NotaFiscalList({ notasFiscais, onSave, onDelete, userSet
                 </div>
               </div>
 
-              {/* 2. Empresa Vinculada Selection */}
-              <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                <label className="block text-xs font-bold text-natural-text">
-                  Empresa Pagadora / Vinculada *
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    id="btn-empresa-brands"
-                    type="button"
-                    onClick={() => setEmpresa('Bio Brands')}
-                    className={`p-3 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                      empresa === 'Bio Brands'
-                        ? 'border-indigo-500 bg-indigo-50/40 text-indigo-950 ring-2 ring-indigo-500/20'
-                        : 'border-natural-border bg-slate-50 text-natural-text hover:bg-slate-100/50'
-                    }`}
-                  >
-                    <div>
-                      <span className="text-xs font-bold block">Bio Brands</span>
-                      <span className="text-[10px] text-natural-muted block">Operações de marcas de consumo</span>
-                    </div>
-                    <span className={`h-4 w-4 rounded-full border flex items-center justify-center ${
-                      empresa === 'Bio Brands' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 bg-white'
-                    }`}>
-                      {empresa === 'Bio Brands' && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
-                    </span>
-                  </button>
+              {/* 2. Empresa Vinculada, Filial e Contrato */}
+              <div className="space-y-3 pt-1 border-t border-slate-100">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-natural-text">
+                    Empresa Pagadora / Vinculada *
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      id="btn-empresa-brands"
+                      type="button"
+                      onClick={() => handleEmpresaChange('Bio Brands')}
+                      className={`p-3 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                        empresa === 'Bio Brands'
+                          ? 'border-indigo-500 bg-indigo-50/40 text-indigo-950 ring-2 ring-indigo-500/20'
+                          : 'border-natural-border bg-slate-50 text-natural-text hover:bg-slate-100/50'
+                      }`}
+                    >
+                      <div>
+                        <span className="text-xs font-bold block">Bio Brands</span>
+                        <span className="text-[10px] text-natural-muted block">Operações de marcas de consumo</span>
+                      </div>
+                      <span className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                        empresa === 'Bio Brands' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 bg-white'
+                      }`}>
+                        {empresa === 'Bio Brands' && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </span>
+                    </button>
 
-                  <button
-                    id="btn-empresa-scientific"
-                    type="button"
-                    onClick={() => setEmpresa('Bio Scientific')}
-                    className={`p-3 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                      empresa === 'Bio Scientific'
-                        ? 'border-emerald-500 bg-emerald-50/40 text-emerald-950 ring-2 ring-emerald-500/20'
-                        : 'border-natural-border bg-slate-50 text-natural-text hover:bg-slate-100/50'
-                    }`}
-                  >
-                    <div>
-                      <span className="text-xs font-bold block">Bio Scientific</span>
-                      <span className="text-[10px] text-natural-muted block">Laboratórios e biotecnologia</span>
-                    </div>
-                    <span className={`h-4 w-4 rounded-full border flex items-center justify-center ${
-                      empresa === 'Bio Scientific' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 bg-white'
-                    }`}>
-                      {empresa === 'Bio Scientific' && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
-                    </span>
-                  </button>
+                    <button
+                      id="btn-empresa-scientific"
+                      type="button"
+                      onClick={() => handleEmpresaChange('Bio Scientific')}
+                      className={`p-3 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                        empresa === 'Bio Scientific'
+                          ? 'border-emerald-500 bg-emerald-50/40 text-emerald-950 ring-2 ring-emerald-500/20'
+                          : 'border-natural-border bg-slate-50 text-natural-text hover:bg-slate-100/50'
+                      }`}
+                    >
+                      <div>
+                        <span className="text-xs font-bold block">Bio Scientific</span>
+                        <span className="text-[10px] text-natural-muted block">Laboratórios e biotecnologia</span>
+                      </div>
+                      <span className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                        empresa === 'Bio Scientific' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 bg-white'
+                      }`}>
+                        {empresa === 'Bio Scientific' && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filial e Contrato */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Filial */}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-natural-text flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Building size={13} className="text-natural-muted" />
+                        <span>Filial *</span>
+                      </span>
+                      <span className="text-[10px] text-natural-muted font-mono">
+                        ({filialOptions.length} filiais {empresa})
+                      </span>
+                    </label>
+                    <select
+                      id="nf-select-filial"
+                      value={filial}
+                      onChange={(e) => setFilial(e.target.value)}
+                      className="w-full bg-slate-50 border border-natural-border rounded-xl px-3 py-2 text-xs text-natural-text focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all font-medium"
+                    >
+                      {filialOptions.map((fil) => (
+                        <option key={fil} value={fil}>
+                          {fil}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Contrato */}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-natural-text">
+                      Contrato <span className="text-xs font-normal text-natural-muted">(Opcional)</span>
+                    </label>
+                    <input
+                      id="nf-input-contrato"
+                      type="text"
+                      value={contrato}
+                      onChange={(e) => setContrato(e.target.value)}
+                      placeholder="Ex: CTR-2026-089 / Locação"
+                      className="w-full bg-slate-50 border border-natural-border rounded-xl px-3.5 py-2 text-xs text-natural-text placeholder-natural-muted focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 

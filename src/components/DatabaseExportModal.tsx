@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Database, Download, Copy, Check, X, Table, ShieldCheck, Code, ArrowRight } from 'lucide-react';
-import { Colaborador, Equipamento, NotaFiscal, UserSettings } from '../types';
+import { Colaborador, Equipamento, NotaFiscal, UserSettings, EmpresaFilial } from '../types';
 import { generateMySQLScript, downloadMySQLFile } from '../utils/mysqlExport';
 
 interface DatabaseExportModalProps {
   colaboradores: Colaborador[];
   equipamentos: Equipamento[];
   notasFiscais: NotaFiscal[];
+  empresasFiliais?: EmpresaFilial[];
   userSettings: UserSettings;
   onClose: () => void;
 }
@@ -15,13 +16,14 @@ export default function DatabaseExportModal({
   colaboradores,
   equipamentos,
   notasFiscais,
+  empresasFiliais = [],
   userSettings,
   onClose
 }: DatabaseExportModalProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'sql'>('overview');
   const [copied, setCopied] = useState(false);
 
-  const sqlScript = generateMySQLScript(colaboradores, equipamentos, notasFiscais, userSettings);
+  const sqlScript = generateMySQLScript(colaboradores, equipamentos, notasFiscais, userSettings, empresasFiliais);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(sqlScript);
@@ -30,10 +32,16 @@ export default function DatabaseExportModal({
   };
 
   const handleDownload = () => {
-    downloadMySQLFile(colaboradores, equipamentos, notasFiscais, userSettings);
+    downloadMySQLFile(colaboradores, equipamentos, notasFiscais, userSettings, empresasFiliais);
   };
 
   const tableSummary = [
+    {
+      name: 'empresas_filiais',
+      description: 'Cadastro institucional de empresas, filiais, razões sociais e faixas IP',
+      count: empresasFiliais.length,
+      keys: 'PRIMARY KEY (id), KEY (empresa, filial, rede)',
+    },
     {
       name: 'colaboradores',
       description: 'Gestão de funcionários, setores, cargos, documentos e filiais',

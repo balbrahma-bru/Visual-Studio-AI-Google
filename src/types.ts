@@ -17,7 +17,50 @@ export interface Colaborador {
   filial?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'colaboradores' | 'cadastro' | 'equipamentos' | 'notas_fiscais' | 'administracao';
+export type ActiveTab = 'dashboard' | 'empresa_filial' | 'colaboradores' | 'cadastro' | 'equipamentos' | 'notas_fiscais' | 'administracao';
+
+export interface EmpresaFilial {
+  id: string;
+  idEmpresa: number;
+  empresa: string;
+  filial: string;
+  razaoSocial: string;
+  nomeFantasia?: string;
+  cnpj: string;
+  ie: string;
+  im?: string;
+  cnae?: string;
+  regimeTributario?: string;
+  dataAbertura?: string;
+  
+  // Endereço e Localização
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  pais?: string;
+
+  // Contato e Gestão
+  telefone?: string;
+  telefoneSecundario?: string;
+  email?: string;
+  responsavel?: string;
+  cargoResponsavel?: string;
+
+  // Infraestrutura de Rede e TI
+  rede: string;
+  gateway?: string;
+  dns?: string;
+  provedorInternet?: string;
+
+  // Observações adicionais
+  observacoes?: string;
+  ativo: boolean;
+  dataDesativacao?: string;
+}
 
 export interface NotaFiscalItem {
   id: string;
@@ -42,6 +85,8 @@ export interface NotaFiscal {
   dataCadastro: string;
   valorTotalNota: number;
   empresa: 'Bio Brands' | 'Bio Scientific';
+  filial?: string;
+  contrato?: string;
   itens: NotaFiscalItem[];
   notaFiscalFile?: NotaFiscalAnexo | null;
   outrosArquivos?: NotaFiscalAnexo[];

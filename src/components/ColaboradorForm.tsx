@@ -1,22 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserPlus, Save, X, Sparkles, HelpCircle, Check, AlertTriangle, Plus, Trash2, Phone } from 'lucide-react';
-import { Colaborador } from '../types';
-import { SETORES, AVATAR_COLORS, formatCPF, formatRG, formatTelefone, validateCPF } from '../data';
+import { Colaborador, EmpresaFilial } from '../types';
+import { SETORES, AVATAR_COLORS, formatCPF, formatRG, formatTelefone, validateCPF, FILIAIS_BY_EMPRESA } from '../data';
 
 interface ColaboradorFormProps {
   colaboradorToEdit: Colaborador | null;
   onSave: (colaborador: Colaborador) => void;
   onCancel: () => void;
   colaboradores?: Colaborador[];
+  empresasFiliais?: EmpresaFilial[];
 }
 
-// Options for Empresa and Filial
+// Options for Empresa
 const EMPRESAS = ['Bio Brands', 'Bio Scientific', 'Terceiros'];
-const FILIAIS_BY_EMPRESA: { [key: string]: string[] } = {
-  'Bio Brands': ['Rio de Janeiro', 'Paraíba', 'Brusque', 'Moema', 'Vila Madalena', 'Recife'],
-  'Bio Scientific': ['Matriz', 'CDBR116'],
-  'Terceiros': ['Rio de Janeiro', 'Paraíba', 'Brusque', 'Moema', 'Vila Madalena', 'CDBR116', 'Matriz', 'Recife']
-};
 
 const getEmailForExibicao = (nameExib: string, emp: string) => {
   if (!nameExib.trim()) return '';
@@ -39,7 +35,7 @@ const getEmailForExibicao = (nameExib: string, emp: string) => {
   return `${prefix}${suffix}`;
 };
 
-export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel, colaboradores }: ColaboradorFormProps) {
+export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel, colaboradores, empresasFiliais }: ColaboradorFormProps) {
   // Form fields
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [exibicao, setExibicao] = useState('');
@@ -217,29 +213,36 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel, c
     }
   };
 
-  // Compute all available Filiais (ensuring current filial and custom filiais are always included and selectable)
+  // Compute available active Filiais (ativo = 1 / true) strictly for the selected Empresa
   const filialOptions = useMemo(() => {
-    const ALL_KNOWN_FILIAIS = [
-      'Rio de Janeiro',
-      'Paraíba',
-      'Brusque',
-      'Moema',
-      'Vila Madalena',
-      'Recife',
-      'Matriz',
-      'CDBR116'
-    ];
+    if (empresasFiliais && empresasFiliais.length > 0) {
+      const normEmp = empresa.trim().toLowerCase().replace(/\s+/g, '');
+      const filtered = empresasFiliais.filter(ef => {
+        const efNorm = (ef.empresa || '').trim().toLowerCase().replace(/\s+/g, '');
+        const isAtivo = ef.ativo === true; // Somente filiais ativas (ativo = 1)
+        return (efNorm === normEmp || (empresa === 'Terceiros')) && isAtivo;
+      });
+
+      const list = Array.from(
+        new Set(
+          filtered
+            .map(ef => ef.filial?.trim())
+            .filter((f): f is string => Boolean(f))
+        )
+      ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+      if (filial && !list.includes(filial)) {
+        list.push(filial);
+      }
+      if (list.length > 0) return list;
+    }
+
     const preferred = FILIAIS_BY_EMPRESA[empresa] || [];
-    const set = new Set([...preferred, ...ALL_KNOWN_FILIAIS]);
+    const set = new Set([...preferred]);
     if (filial) set.add(filial);
     if (colaboradorToEdit?.filial) set.add(colaboradorToEdit.filial);
-    if (colaboradores) {
-      colaboradores.forEach((c) => {
-        if (c.filial) set.add(c.filial);
-      });
-    }
     return Array.from(set).filter(Boolean);
-  }, [empresa, filial, colaboradorToEdit, colaboradores]);
+  }, [empresa, filial, colaboradorToEdit, empresasFiliais]);
 
   // Validation before saving
   const handleSubmit = (e: React.FormEvent) => {

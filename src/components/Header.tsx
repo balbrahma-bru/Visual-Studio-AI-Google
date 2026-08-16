@@ -45,7 +45,7 @@ export default function Header({
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    if (activeTab !== 'colaboradores' && e.target.value !== '') {
+    if (activeTab !== 'colaboradores' && activeTab !== 'empresa_filial' && e.target.value !== '') {
       setActiveTab('colaboradores');
     }
   };
