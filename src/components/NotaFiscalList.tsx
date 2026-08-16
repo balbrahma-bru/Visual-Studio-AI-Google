@@ -32,7 +32,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { NotaFiscal, NotaFiscalItem, NotaFiscalAnexo, UserSettings, EmpresaFilial } from '../types';
 import { FILIAIS_BY_EMPRESA } from '../data';
 
-type NFSortField = 'dataEmissao' | 'numero' | 'empresa' | 'filial' | 'emissor' | 'valorTotalNota';
+type NFSortField = 'dataEmissao' | 'numero' | 'empresa' | 'filial' | 'emissor' | 'dataVencimento' | 'valorTotalNota';
 type NFSortOrder = 'asc' | 'desc';
 
 interface NotaFiscalListProps {
@@ -93,6 +93,15 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     return FILIAIS_BY_EMPRESA[targetEmpresa] || [];
   };
 
+  // Helper to format Emissor name to only first name and surname (nome e sobrenome)
+  const getShortEmissorName = (name: string): string => {
+    if (!name) return '-';
+    const clean = name.trim();
+    const parts = clean.split(/\s+/);
+    if (parts.length <= 2) return clean;
+    return `${parts[0]} ${parts[1]}`;
+  };
+
   // Modal and details view states
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingNota, setEditingNota] = useState<NotaFiscal | null>(null);
@@ -103,6 +112,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
   const [numero, setNumero] = useState('');
   const [emissor, setEmissor] = useState('');
   const [dataEmissao, setDataEmissao] = useState('');
+  const [dataVencimento, setDataVencimento] = useState('');
   const [empresa, setEmpresa] = useState<'Bio Brands' | 'Bio Scientific'>('Bio Brands');
   const [filial, setFilial] = useState('ALPHAVILLE');
   const [contrato, setContrato] = useState('');
@@ -198,6 +208,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       setNumero(nota.numero);
       setEmissor(nota.emissor);
       setDataEmissao(nota.dataEmissao);
+      setDataVencimento(nota.dataVencimento || '');
       setEmpresa(nota.empresa);
       const available = getFiliaisForEmpresa(nota.empresa, empresasFiliais);
       const matched = available.find(f => f.trim().toLowerCase() === (nota.filial || '').trim().toLowerCase());
@@ -212,6 +223,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       setNumero('');
       setEmissor('');
       setDataEmissao(new Date().toISOString().split('T')[0]);
+      setDataVencimento('');
       setEmpresa('Bio Brands');
       const available = getFiliaisForEmpresa('Bio Brands', empresasFiliais);
       setFilial(available[0] || 'ALPHAVILLE');
@@ -237,6 +249,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     setNumero(''); // Número fica Null / Vazio para o novo registro
     setEmissor(nota.emissor || '');
     setDataEmissao(nota.dataEmissao || new Date().toISOString().split('T')[0]);
+    setDataVencimento(nota.dataVencimento || '');
     setEmpresa(nota.empresa);
     const available = getFiliaisForEmpresa(nota.empresa, empresasFiliais);
     const matched = available.find(f => f.trim().toLowerCase() === (nota.filial || '').trim().toLowerCase());
@@ -425,6 +438,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       numero: cleanNumeroNF(numero) || numero.trim(),
       emissor: emissor.trim(),
       dataEmissao,
+      dataVencimento: dataVencimento || undefined,
       dataCadastro: editingNota ? editingNota.dataCadastro : new Date().toISOString(),
       valorTotalNota: Number(computedTotalNota.toFixed(2)),
       empresa,
@@ -516,6 +530,12 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
           comparison = (a.filial || '').localeCompare(b.filial || '', 'pt-BR', { sensitivity: 'base' });
         } else if (sortField === 'emissor') {
           comparison = (a.emissor || '').localeCompare(b.emissor || '', 'pt-BR', { sensitivity: 'base' });
+        } else if (sortField === 'dataVencimento') {
+          const valA = (a.dataVencimento || '').trim();
+          const valB = (b.dataVencimento || '').trim();
+          if (!valA && valB) comparison = 1;
+          else if (valA && !valB) comparison = -1;
+          else comparison = valA.localeCompare(valB);
         } else if (sortField === 'valorTotalNota') {
           comparison = (a.valorTotalNota || 0) - (b.valorTotalNota || 0);
         }
@@ -647,7 +667,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-center">
           
           {/* Search box */}
-          <div className="md:col-span-8 relative">
+          <div className="md:col-span-6 relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-natural-muted">
               <Search size={16} />
             </div>
@@ -671,16 +691,36 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
           </div>
 
           {/* Company Filter */}
-          <div className="md:col-span-4">
+          <div className="md:col-span-3">
             <select
               id="filter-nf-empresa"
               value={selectedEmpresa}
-              onChange={(e) => setSelectedEmpresa(e.target.value)}
-              className="w-full bg-slate-50 border border-natural-border rounded-xl px-3 py-2 text-xs text-natural-text focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all"
+              onChange={(e) => {
+                setSelectedEmpresa(e.target.value);
+                setSelectedFilialFilter('All');
+              }}
+              className="w-full bg-slate-50 border border-natural-border rounded-xl px-3 py-2 text-xs text-natural-text focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all cursor-pointer"
             >
               <option value="All">Todas Empresas (Filtro)</option>
               <option value="Bio Brands">Bio Brands</option>
               <option value="Bio Scientific">Bio Scientific</option>
+            </select>
+          </div>
+
+          {/* Filial Filter */}
+          <div className="md:col-span-3">
+            <select
+              id="filter-nf-filial"
+              value={selectedFilialFilter}
+              onChange={(e) => setSelectedFilialFilter(e.target.value)}
+              className="w-full bg-slate-50 border border-natural-border rounded-xl px-3 py-2 text-xs text-natural-text focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="All">Todas as Filiais ({availableFilterFiliais.length})</option>
+              {availableFilterFiliais.map((filial) => (
+                <option key={filial} value={filial}>
+                  {filial}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -695,26 +735,172 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-slate-50 text-natural-muted font-mono border-b border-natural-border font-semibold uppercase tracking-wider text-[10px]">
               <tr>
-                <th className="px-4 py-3.5">
-                  <div className="flex items-center space-x-1" title="Ordenado da nota mais recente para a mais antiga">
-                    <span>Data Emissão</span>
-                    <ArrowDown size={12} className="text-indigo-600" />
+                {/* Data Emissão */}
+                <th
+                  className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('dataEmissao')}
+                  title="Clique para ordenar por Data de Emissão"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className={sortField === 'dataEmissao' ? 'text-indigo-600 font-bold' : ''}>
+                      Data Emissão
+                    </span>
+                    {sortField === 'dataEmissao' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
                   </div>
                 </th>
-                <th className="px-4 py-3.5">Número</th>
-                <th className="px-4 py-3.5">Empresa</th>
-                <th className="px-4 py-3.5">Filial</th>
-                <th className="px-4 py-3.5">Emissor / Fornecedor</th>
-                <th className="px-4 py-3.5">Anexos</th>
-                <th className="px-4 py-3.5 text-right">Valor Total</th>
-                <th className="px-4 py-3.5 text-center min-w-[210px]">Ações</th>
+
+                {/* Número */}
+                <th
+                  className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('numero')}
+                  title="Clique para ordenar por Número da NF"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className={sortField === 'numero' ? 'text-indigo-600 font-bold' : ''}>
+                      Número
+                    </span>
+                    {sortField === 'numero' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Empresa */}
+                <th
+                  className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('empresa')}
+                  title="Clique para ordenar por Empresa"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className={sortField === 'empresa' ? 'text-indigo-600 font-bold' : ''}>
+                      Empresa
+                    </span>
+                    {sortField === 'empresa' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Filial */}
+                <th
+                  className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('filial')}
+                  title="Clique para ordenar por Filial"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className={sortField === 'filial' ? 'text-indigo-600 font-bold' : ''}>
+                      Filial
+                    </span>
+                    {sortField === 'filial' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Emissor / Fornecedor */}
+                <th
+                  className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('emissor')}
+                  title="Clique para ordenar por Emissor / Fornecedor"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className={sortField === 'emissor' ? 'text-indigo-600 font-bold' : ''}>
+                      Emissor / Fornecedor
+                    </span>
+                    {sortField === 'emissor' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Data Vencimento */}
+                <th
+                  className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('dataVencimento')}
+                  title="Clique para ordenar por Data de Vencimento"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className={sortField === 'dataVencimento' ? 'text-indigo-600 font-bold' : ''}>
+                      Data Vencimento
+                    </span>
+                    {sortField === 'dataVencimento' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Anexos */}
+                <th className="px-3 py-3">Anexos</th>
+
+                {/* Valor Total */}
+                <th
+                  className="px-3 py-3 text-right cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('valorTotalNota')}
+                  title="Clique para ordenar por Valor Total"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span className={sortField === 'valorTotalNota' ? 'text-indigo-600 font-bold' : ''}>
+                      Valor Total
+                    </span>
+                    {sortField === 'valorTotalNota' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Ações */}
+                <th className="px-3 py-3 text-center w-[120px]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-sans">
               <AnimatePresence mode="popLayout">
                 {filteredNotas.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-natural-muted">
+                    <td colSpan={9} className="px-6 py-12 text-center text-natural-muted">
                       <FileText size={36} className="mx-auto mb-2 text-slate-300" />
                       <p className="text-sm font-medium">Nenhuma nota fiscal encontrada.</p>
                       <p className="text-xs text-natural-muted mt-0.5">
@@ -733,66 +919,70 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                       className="hover:bg-slate-50/70 transition-colors"
                     >
                       {/* Data Emissão */}
-                      <td className="px-4 py-3.5 whitespace-nowrap font-mono font-medium text-slate-700">
+                      <td className="px-3 py-3 whitespace-nowrap font-mono font-medium text-slate-700">
                         {formatDateBR(nf.dataEmissao)}
                       </td>
 
                       {/* Número */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
+                      <td className="px-3 py-3 whitespace-nowrap">
                         <span className="font-mono bg-slate-100 border border-slate-200 font-bold px-2 py-0.5 rounded text-slate-700 text-[11px]">
                           Nº {cleanNumeroNF(nf.numero)}
                         </span>
                       </td>
 
                       {/* Empresa */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="space-y-1">
-                          <span
-                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border inline-block ${
-                              nf.empresa === 'Bio Brands'
-                                ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
-                                : 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                            }`}
-                          >
-                            {nf.empresa}
-                          </span>
-                          {nf.contrato && (
-                            <div className="text-[10px] font-mono text-indigo-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 inline-block" title={nf.contrato}>
-                              {nf.contrato}
-                            </div>
-                          )}
-                        </div>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <span
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border inline-block ${
+                            nf.empresa === 'Bio Brands'
+                              ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
+                              : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                          }`}
+                        >
+                          {nf.empresa}
+                        </span>
                       </td>
 
                       {/* Filial */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <Building size={13} className="text-slate-400 shrink-0" />
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <Building size={12} className="text-slate-400 shrink-0" />
                           <span className="text-xs font-bold text-natural-text uppercase tracking-tight" title={nf.filial}>
                             {nf.filial || '-'}
                           </span>
                         </div>
                       </td>
 
-                      {/* Emissor */}
-                      <td className="px-4 py-3.5">
-                        <span className="font-semibold text-natural-text block truncate max-w-[200px]" title={nf.emissor}>
-                          {nf.emissor}
+                      {/* Emissor / Fornecedor (Nome e Sobrenome visualmente) */}
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <span className="font-semibold text-natural-text block truncate" title={nf.emissor}>
+                          {getShortEmissorName(nf.emissor)}
                         </span>
                       </td>
 
+                      {/* Data Vencimento */}
+                      <td className="px-3 py-3 whitespace-nowrap font-mono text-xs">
+                        {nf.dataVencimento ? (
+                          <span className="text-slate-700 font-medium">
+                            {formatDateBR(nf.dataVencimento)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">-</span>
+                        )}
+                      </td>
+
                       {/* Anexos */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="flex items-center space-x-1.5">
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <div className="flex items-center space-x-1">
                           {nf.notaFiscalFile && (
-                            <span className="text-[10px] bg-slate-50 border border-slate-200 text-natural-text px-2 py-0.5 rounded flex items-center font-mono" title={nf.notaFiscalFile.name}>
-                              <FileText size={11} className="mr-1 text-indigo-500" />
+                            <span className="text-[10px] bg-slate-50 border border-slate-200 text-natural-text px-1.5 py-0.5 rounded flex items-center font-mono" title={nf.notaFiscalFile.name}>
+                              <FileText size={11} className="mr-0.5 text-indigo-500" />
                               NF
                             </span>
                           )}
                           {nf.outrosArquivos && nf.outrosArquivos.length > 0 && (
-                            <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-700 px-2 py-0.5 rounded flex items-center font-mono">
-                              <File size={11} className="mr-1 text-amber-500" />
+                            <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-700 px-1.5 py-0.5 rounded flex items-center font-mono" title={`${nf.outrosArquivos.length} outros anexos`}>
+                              <File size={11} className="mr-0.5 text-amber-500" />
                               +{nf.outrosArquivos.length}
                             </span>
                           )}
@@ -800,30 +990,28 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                       </td>
 
                       {/* Valor Total */}
-                      <td className="px-4 py-3.5 text-right whitespace-nowrap font-mono font-bold text-natural-text">
+                      <td className="px-3 py-3 text-right whitespace-nowrap font-mono font-bold text-natural-text">
                         {formatCurrency(nf.valorTotalNota)}
                       </td>
 
                       {/* Ações */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center space-x-1.5">
+                      <td className="px-3 py-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center space-x-1">
                           <button
                             id={`btn-view-details-${nf.id}`}
                             onClick={() => setSelectedNotaForDetails(nf)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                            title="Visualizar detalhes da Nota"
+                            className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-colors cursor-pointer"
+                            title="Visualizar detalhes da Nota Fiscal"
                           >
-                            <Eye size={13} />
-                            <span>Visualizar</span>
+                            <Eye size={14} />
                           </button>
                           <button
                             id={`btn-duplicate-nf-${nf.id}`}
                             onClick={() => handleDuplicateNota(nf)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors cursor-pointer"
                             title="Duplicar Nota Fiscal (Criar novo registro com Número e Anexos em branco)"
                           >
-                            <Copy size={13} />
-                            <span>Duplicar</span>
+                            <Copy size={14} />
                           </button>
                           <button
                             id={`btn-edit-nf-${nf.id}`}
@@ -831,7 +1019,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                             className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors cursor-pointer"
                             title="Editar Nota Fiscal"
                           >
-                            <Pencil size={13} />
+                            <Pencil size={14} />
                           </button>
                           <button
                             id={`btn-delete-nf-${nf.id}`}
@@ -839,7 +1027,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                             className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg transition-colors cursor-pointer"
                             title="Excluir Nota Fiscal"
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -907,10 +1095,16 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
               {/* Scrollable details content */}
               <div className="p-6 overflow-y-auto space-y-6 flex-1">
                 {/* Quick Summary Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs font-mono">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 text-xs font-mono">
                   <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
                     <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Data Emissão</span>
                     <span className="text-natural-text font-bold block">{formatDateBR(selectedNotaForDetails.dataEmissao)}</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Data Vencimento</span>
+                    <span className="text-natural-text font-bold block">
+                      {selectedNotaForDetails.dataVencimento ? formatDateBR(selectedNotaForDetails.dataVencimento) : 'Não informada'}
+                    </span>
                   </div>
                   <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
                     <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Filial Vinculada</span>
@@ -1108,7 +1302,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
             <form onSubmit={handleSaveSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
               
               {/* 1. Basic Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-1">
                   <label className="block text-xs font-bold text-natural-text">
                     Nº da Nota Fiscal *
@@ -1149,6 +1343,19 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     required
                     value={dataEmissao}
                     onChange={(e) => setDataEmissao(e.target.value)}
+                    className="w-full bg-slate-50 border border-natural-border rounded-xl px-3.5 py-2 text-xs text-natural-text focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-natural-text">
+                    Data de Vencimento
+                  </label>
+                  <input
+                    id="nf-input-data-vencimento"
+                    type="date"
+                    value={dataVencimento}
+                    onChange={(e) => setDataVencimento(e.target.value)}
                     className="w-full bg-slate-50 border border-natural-border rounded-xl px-3.5 py-2 text-xs text-natural-text focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all"
                   />
                 </div>

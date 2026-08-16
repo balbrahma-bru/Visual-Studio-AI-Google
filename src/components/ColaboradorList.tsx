@@ -15,6 +15,8 @@ import {
   User,
   UserPlus,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Filter,
   Users,
   Building,
@@ -49,7 +51,7 @@ interface ColaboradorListProps {
   setSortOrder?: (order: SortOrder) => void;
 }
 
-type SortField = 'nomeCompleto' | 'cargo' | 'setor' | 'dataAdmissao' | 'filial';
+type SortField = 'nomeCompleto' | 'cargo' | 'setor' | 'dataAdmissao' | 'filial' | 'status';
 type SortOrder = 'asc' | 'desc';
 
 export default function ColaboradorList({
@@ -202,19 +204,23 @@ export default function ColaboradorList({
 
     // 4. Sorting
     result.sort((a, b) => {
-      let valA = a[sortField] || '';
-      let valB = b[sortField] || '';
-      
+      let comparison = 0;
+
       if (sortField === 'dataAdmissao') {
-        valA = new Date(valA).getTime().toString();
-        valB = new Date(valB).getTime().toString();
+        const timeA = new Date(a.dataAdmissao || '').getTime() || 0;
+        const timeB = new Date(b.dataAdmissao || '').getTime() || 0;
+        comparison = timeA - timeB;
+      } else {
+        const valA = (a[sortField] || '').trim();
+        const valB = (b[sortField] || '').trim();
+        comparison = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' });
       }
 
-      if (sortOrder === 'asc') {
-        return valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' });
-      } else {
-        return valB.localeCompare(valA, 'pt-BR', { sensitivity: 'base' });
+      if (comparison === 0) {
+        return (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR', { sensitivity: 'base' });
       }
+
+      return sortOrder === 'asc' ? comparison : -comparison;
     });
 
     return result;
@@ -225,7 +231,7 @@ export default function ColaboradorList({
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortOrder('asc');
+      setSortOrder(field === 'dataAdmissao' ? 'desc' : 'asc');
     }
   };
 
@@ -714,27 +720,109 @@ export default function ColaboradorList({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-natural-light border-b border-natural-border text-natural-muted font-bold text-[11px] uppercase tracking-wider">
-                    <th className="py-4 px-5">Colaborador</th>
-                    <th className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors" onClick={() => handleSort('cargo')}>
-                      <div className="flex items-center space-x-1">
-                        <span>Cargo</span>
-                        <ArrowUpDown size={12} className="text-natural-muted" />
+                    {/* Colaborador */}
+                    <th
+                      className="py-4 px-5 cursor-pointer hover:bg-natural-light/50 transition-colors select-none group"
+                      onClick={() => handleSort('nomeCompleto')}
+                      title="Clique para ordenar por Nome"
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        <span className={sortField === 'nomeCompleto' ? 'text-natural-primary font-bold' : ''}>Colaborador</span>
+                        {sortField === 'nomeCompleto' ? (
+                          sortOrder === 'desc' ? (
+                            <ArrowDown size={13} className="text-natural-primary shrink-0" />
+                          ) : (
+                            <ArrowUp size={13} className="text-natural-primary shrink-0" />
+                          )
+                        ) : (
+                          <ArrowUpDown size={12} className="text-natural-muted opacity-40 group-hover:opacity-100 shrink-0" />
+                        )}
                       </div>
                     </th>
-                    <th className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors" onClick={() => handleSort('setor')}>
-                      <div className="flex items-center space-x-1">
-                        <span>Setor</span>
-                        <ArrowUpDown size={12} className="text-natural-muted" />
+
+                    {/* Cargo */}
+                    <th
+                      className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors select-none group"
+                      onClick={() => handleSort('cargo')}
+                      title="Clique para ordenar por Cargo"
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        <span className={sortField === 'cargo' ? 'text-natural-primary font-bold' : ''}>Cargo</span>
+                        {sortField === 'cargo' ? (
+                          sortOrder === 'desc' ? (
+                            <ArrowDown size={13} className="text-natural-primary shrink-0" />
+                          ) : (
+                            <ArrowUp size={13} className="text-natural-primary shrink-0" />
+                          )
+                        ) : (
+                          <ArrowUpDown size={12} className="text-natural-muted opacity-40 group-hover:opacity-100 shrink-0" />
+                        )}
                       </div>
                     </th>
-                    <th className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors" onClick={() => handleSort('filial')}>
-                      <div className="flex items-center space-x-1">
-                        <span>Filial</span>
-                        <ArrowUpDown size={12} className="text-natural-muted" />
+
+                    {/* Setor */}
+                    <th
+                      className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors select-none group"
+                      onClick={() => handleSort('setor')}
+                      title="Clique para ordenar por Setor"
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        <span className={sortField === 'setor' ? 'text-natural-primary font-bold' : ''}>Setor</span>
+                        {sortField === 'setor' ? (
+                          sortOrder === 'desc' ? (
+                            <ArrowDown size={13} className="text-natural-primary shrink-0" />
+                          ) : (
+                            <ArrowUp size={13} className="text-natural-primary shrink-0" />
+                          )
+                        ) : (
+                          <ArrowUpDown size={12} className="text-natural-muted opacity-40 group-hover:opacity-100 shrink-0" />
+                        )}
                       </div>
                     </th>
+
+                    {/* Filial */}
+                    <th
+                      className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors select-none group"
+                      onClick={() => handleSort('filial')}
+                      title="Clique para ordenar por Filial"
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        <span className={sortField === 'filial' ? 'text-natural-primary font-bold' : ''}>Filial</span>
+                        {sortField === 'filial' ? (
+                          sortOrder === 'desc' ? (
+                            <ArrowDown size={13} className="text-natural-primary shrink-0" />
+                          ) : (
+                            <ArrowUp size={13} className="text-natural-primary shrink-0" />
+                          )
+                        ) : (
+                          <ArrowUpDown size={12} className="text-natural-muted opacity-40 group-hover:opacity-100 shrink-0" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Celular */}
                     <th className="py-4 px-4">Celular</th>
-                    <th className="py-4 px-4">Status</th>
+
+                    {/* Status */}
+                    <th
+                      className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors select-none group"
+                      onClick={() => handleSort('status')}
+                      title="Clique para ordenar por Status"
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        <span className={sortField === 'status' ? 'text-natural-primary font-bold' : ''}>Status</span>
+                        {sortField === 'status' ? (
+                          sortOrder === 'desc' ? (
+                            <ArrowDown size={13} className="text-natural-primary shrink-0" />
+                          ) : (
+                            <ArrowUp size={13} className="text-natural-primary shrink-0" />
+                          )
+                        ) : (
+                          <ArrowUpDown size={12} className="text-natural-muted opacity-40 group-hover:opacity-100 shrink-0" />
+                        )}
+                      </div>
+                    </th>
+
                     <th className="py-4 px-5 text-right">Ações</th>
                   </tr>
                 </thead>

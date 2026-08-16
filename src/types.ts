@@ -82,6 +82,7 @@ export interface NotaFiscal {
   numero: string;
   emissor: string;
   dataEmissao: string;
+  dataVencimento?: string;
   dataCadastro: string;
   valorTotalNota: number;
   empresa: 'Bio Brands' | 'Bio Scientific';
