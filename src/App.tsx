@@ -546,6 +546,7 @@ export default function App() {
         toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         isCollapsed={sidebarCollapsed}
         toggleCollapse={toggleSidebarCollapsed}
+        notasFiscais={notasFiscais}
       />
 
       {/* 2. Main Content Frame */}
@@ -643,13 +644,15 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'notas_fiscais' && (
+              {(activeTab === 'notas_fiscais' || activeTab === 'financeiro') && (
                 <NotaFiscalList
                   notasFiscais={notasFiscais}
                   empresasFiliais={empresasFiliais}
                   onSave={handleSaveNotaFiscal}
                   onDelete={handleDeleteNotaFiscal}
                   userSettings={userSettings}
+                  activeSubTab={activeTab === 'financeiro' ? 'financeiro' : 'todas'}
+                  onSubTabChange={(tab) => setActiveTab(tab === 'financeiro' ? 'financeiro' : 'notas_fiscais')}
                 />
               )}
 

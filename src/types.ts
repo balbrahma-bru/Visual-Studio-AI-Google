@@ -17,7 +17,7 @@ export interface Colaborador {
   filial?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'empresa_filial' | 'colaboradores' | 'cadastro' | 'equipamentos' | 'notas_fiscais' | 'administracao';
+export type ActiveTab = 'dashboard' | 'empresa_filial' | 'colaboradores' | 'cadastro' | 'equipamentos' | 'notas_fiscais' | 'financeiro' | 'administracao';
 
 export interface EmpresaFilial {
   id: string;
@@ -94,8 +94,12 @@ export interface NotaFiscal {
   cdc?: string;
   itens: NotaFiscalItem[];
   notaFiscalFile?: NotaFiscalAnexo | null;
+  boletoFile?: NotaFiscalAnexo | null;
   outrosArquivos?: NotaFiscalAnexo[];
   observacoes?: string;
+  enviadoFinanceiro?: boolean;
+  dataEnvioFinanceiro?: string;
+  emailEnvioFinanceiro?: string;
 }
 
 export interface HistoricoEquipamento {

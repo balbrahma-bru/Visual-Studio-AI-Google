@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -26,11 +26,21 @@ import {
   ArrowUp,
   ArrowUpDown,
   Copy,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Send,
+  Mail,
+  CheckCheck,
+  CreditCard,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  Loader2,
+  Receipt,
+  MailCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { NotaFiscal, NotaFiscalItem, NotaFiscalAnexo, UserSettings, EmpresaFilial } from '../types';
-import { FILIAIS_BY_EMPRESA } from '../data';
+import { FILIAIS_BY_EMPRESA, isNotaAptaFinanceiro, EMAIL_FINANCEIRO_DESTINO } from '../data';
 
 type NFSortField = 'dataEmissao' | 'numero' | 'empresa' | 'filial' | 'emissor' | 'numeroPedido' | 'dataVencimento' | 'valorTotalNota';
 type NFSortOrder = 'asc' | 'desc';
@@ -41,9 +51,37 @@ interface NotaFiscalListProps {
   onSave: (nota: NotaFiscal) => void;
   onDelete: (id: string) => void;
   userSettings: UserSettings;
+  activeSubTab?: 'todas' | 'financeiro';
+  onSubTabChange?: (tab: 'todas' | 'financeiro') => void;
 }
 
-export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, onDelete, userSettings }: NotaFiscalListProps) {
+export default function NotaFiscalList({ 
+  notasFiscais, 
+  empresasFiliais, 
+  onSave, 
+  onDelete, 
+  userSettings,
+  activeSubTab = 'todas',
+  onSubTabChange
+}: NotaFiscalListProps) {
+  // Sub-tab state
+  const [internalSubTab, setInternalSubTab] = useState<'todas' | 'financeiro'>(activeSubTab);
+
+  useEffect(() => {
+    if (activeSubTab) {
+      setInternalSubTab(activeSubTab);
+    }
+  }, [activeSubTab]);
+
+  const currentSubTab = activeSubTab || internalSubTab;
+
+  const handleSwitchSubTab = (tab: 'todas' | 'financeiro') => {
+    setInternalSubTab(tab);
+    if (onSubTabChange) {
+      onSubTabChange(tab);
+    }
+  };
+
   // State for search and filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('All');
@@ -123,8 +161,16 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
   
   // File attachments state
   const [notaFiscalFile, setNotaFiscalFile] = useState<NotaFiscalAnexo | null>(null);
+  const [boletoFile, setBoletoFile] = useState<NotaFiscalAnexo | null>(null);
   const [outrosArquivos, setOutrosArquivos] = useState<NotaFiscalAnexo[]>([]);
   
+  // Modal state for sending invoice to Financeiro
+  const [notaToSendToFinanceiro, setNotaToSendToFinanceiro] = useState<NotaFiscal | null>(null);
+  const [isSendingFinanceiroEmail, setIsSendingFinanceiroEmail] = useState(false);
+  const [sendFinanceiroStep, setSendFinanceiroStep] = useState(0);
+  const [sendFinanceiroSuccess, setSendFinanceiroSuccess] = useState(false);
+  const [sendFinanceiroToast, setSendFinanceiroToast] = useState<string | null>(null);
+
   // Current items being added/edited in the invoice
   const [itens, setItens] = useState<NotaFiscalItem[]>([]);
 
@@ -176,10 +222,12 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
 
   // Drag and drop states
   const [dragActivePrimary, setDragActivePrimary] = useState(false);
+  const [dragActiveBoleto, setDragActiveBoleto] = useState(false);
   const [dragActiveOthers, setDragActiveOthers] = useState(false);
 
   // File input refs
   const primaryFileInputRef = useRef<HTMLInputElement>(null);
+  const boletoFileInputRef = useRef<HTMLInputElement>(null);
   const othersFileInputRef = useRef<HTMLInputElement>(null);
 
   // Format currency helper
@@ -223,6 +271,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       setCdc(nota.cdc || '');
       setObservacoes(nota.observacoes || '');
       setNotaFiscalFile(nota.notaFiscalFile || null);
+      setBoletoFile(nota.boletoFile || null);
       setOutrosArquivos(nota.outrosArquivos || []);
       setItens(nota.itens || []);
     } else {
@@ -240,6 +289,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       setCdc('');
       setObservacoes('');
       setNotaFiscalFile(null);
+      setBoletoFile(null);
       setOutrosArquivos([]);
       setItens([]);
     }
@@ -271,6 +321,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     setCdc(nota.cdc || '');
     setObservacoes(nota.observacoes || '');
     setNotaFiscalFile(null); // Anexos ficam Null
+    setBoletoFile(null); // Boleto fica Null
     setOutrosArquivos([]); // Anexos adicionais ficam Null / Vazios
     setItens(
       (nota.itens || []).map((item, idx) => ({
@@ -334,6 +385,37 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     }
   };
 
+  // Boleto File Drag & Drop Handlers
+  const handleDragBoleto = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActiveBoleto(true);
+    } else if (e.type === "dragleave") {
+      setDragActiveBoleto(false);
+    }
+  };
+
+  const handleDropBoleto = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActiveBoleto(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileRead(e.dataTransfer.files[0], (anexo) => {
+        setBoletoFile(anexo);
+      });
+    }
+  };
+
+  const handleSelectBoleto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileRead(e.target.files[0], (anexo) => {
+        setBoletoFile(anexo);
+      });
+    }
+  };
+
   // Others File Drag & Drop Handlers
   const handleDragOthers = (e: React.DragEvent) => {
     e.preventDefault();
@@ -375,6 +457,12 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
   const handleRemovePrimaryFile = () => {
     setNotaFiscalFile(null);
     if (primaryFileInputRef.current) primaryFileInputRef.current.value = '';
+  };
+
+  // Remove boleto file
+  const handleRemoveBoletoFile = () => {
+    setBoletoFile(null);
+    if (boletoFileInputRef.current) boletoFileInputRef.current.value = '';
   };
 
   // Remove other file
@@ -466,12 +554,72 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       cdc: cdc.trim() || undefined,
       itens,
       notaFiscalFile,
+      boletoFile: boletoFile || undefined,
       outrosArquivos,
-      observacoes: observacoes.trim()
+      observacoes: observacoes.trim(),
+      enviadoFinanceiro: editingNota ? editingNota.enviadoFinanceiro : false,
+      dataEnvioFinanceiro: editingNota ? editingNota.dataEnvioFinanceiro : undefined,
+      emailEnvioFinanceiro: editingNota ? editingNota.emailEnvioFinanceiro : undefined
     };
 
     onSave(payload);
     setIsFormOpen(false);
+  };
+
+  // Open send modal for Financeiro
+  const handleOpenSendModal = (nota: NotaFiscal) => {
+    setNotaToSendToFinanceiro(nota);
+    setIsSendingFinanceiroEmail(false);
+    setSendFinanceiroStep(0);
+    setSendFinanceiroSuccess(false);
+  };
+
+  // Trigger simulated email sending to fabiorodrigues@bioscientific.ind.br
+  const handleConfirmSendToFinanceiro = () => {
+    if (!notaToSendToFinanceiro) return;
+    setIsSendingFinanceiroEmail(true);
+    setSendFinanceiroStep(1);
+
+    // Step 1: Connecting SMTP (600ms)
+    setTimeout(() => {
+      setSendFinanceiroStep(2);
+      // Step 2: Packing attachments: NF + Boleto (650ms)
+      setTimeout(() => {
+        setSendFinanceiroStep(3);
+        // Step 3: Transmitting to fabiorodrigues@bioscientific.ind.br (700ms)
+        setTimeout(() => {
+          setSendFinanceiroStep(4);
+          setSendFinanceiroSuccess(true);
+
+          const updatedNota: NotaFiscal = {
+            ...notaToSendToFinanceiro,
+            enviadoFinanceiro: true,
+            dataEnvioFinanceiro: new Date().toISOString(),
+            emailEnvioFinanceiro: EMAIL_FINANCEIRO_DESTINO
+          };
+
+          onSave(updatedNota);
+
+          // Update details modal if currently open with this note
+          if (selectedNotaForDetails && selectedNotaForDetails.id === notaToSendToFinanceiro.id) {
+            setSelectedNotaForDetails(updatedNota);
+          }
+
+          // Show Toast notification and close modal after brief delay
+          setSendFinanceiroToast(`Nota Fiscal Nº ${cleanNumeroNF(notaToSendToFinanceiro.numero)} e Boleto enviados com sucesso para ${EMAIL_FINANCEIRO_DESTINO}!`);
+          setTimeout(() => {
+            setSendFinanceiroToast(null);
+          }, 6000);
+
+          setTimeout(() => {
+            setNotaToSendToFinanceiro(null);
+            setIsSendingFinanceiroEmail(false);
+            setSendFinanceiroStep(0);
+            setSendFinanceiroSuccess(false);
+          }, 1500);
+        }, 700);
+      }, 650);
+    }, 600);
   };
 
   // Delete Action Confirm
@@ -508,7 +656,14 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
   const filteredNotas = useMemo(() => {
     return notasFiscais
       .filter(nf => {
-        // 1. Search Query
+        // 1. SubTab Filter: 'todas' vs 'financeiro'
+        if (currentSubTab === 'financeiro') {
+          if (!isNotaAptaFinanceiro(nf)) {
+            return false;
+          }
+        }
+
+        // 2. Search Query
         const query = searchQuery.toLowerCase().trim();
         const matchesSearch = !query || 
           nf.numero.toLowerCase().includes(query) ||
@@ -522,10 +677,10 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
           (nf.observacoes && nf.observacoes.toLowerCase().includes(query)) ||
           (nf.itens && nf.itens.some(item => item.descricao.toLowerCase().includes(query) || (item.codigoTotvs && item.codigoTotvs.toLowerCase().includes(query))));
 
-        // 2. Company Filter
+        // 3. Company Filter
         const matchesEmpresa = selectedEmpresa === 'All' || nf.empresa === selectedEmpresa;
 
-        // 3. Filial Filter
+        // 4. Filial Filter
         const matchesFilial = selectedFilialFilter === 'All' || (nf.filial || '').trim().toLowerCase() === selectedFilialFilter.trim().toLowerCase();
 
         return matchesSearch && matchesEmpresa && matchesFilial;
@@ -574,7 +729,19 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
 
         return sortOrder === 'asc' ? comparison : -comparison;
       });
-  }, [notasFiscais, searchQuery, selectedEmpresa, selectedFilialFilter, sortField, sortOrder]);
+  }, [notasFiscais, currentSubTab, searchQuery, selectedEmpresa, selectedFilialFilter, sortField, sortOrder]);
+
+  // Counts for financeiro badge tabs
+  const totalNotasCount = notasFiscais.length;
+  const aptasFinanceiroCount = useMemo(() => {
+    return notasFiscais.filter(isNotaAptaFinanceiro).length;
+  }, [notasFiscais]);
+  const pendentesEnvioFinanceiroCount = useMemo(() => {
+    return notasFiscais.filter(nf => isNotaAptaFinanceiro(nf) && !nf.enviadoFinanceiro).length;
+  }, [notasFiscais]);
+  const enviadasFinanceiroCount = useMemo(() => {
+    return notasFiscais.filter(nf => nf.enviadoFinanceiro).length;
+  }, [notasFiscais]);
 
   // Total summary of filtered invoices
   const stats = useMemo(() => {
@@ -610,33 +777,135 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
 
   return (
     <div className="space-y-8" id="nf-container">
+      {/* Toast Notification for email sending */}
+      <AnimatePresence>
+        {sendFinanceiroToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-6 right-6 z-50 max-w-md bg-emerald-700 text-white p-4 rounded-2xl shadow-xl flex items-center space-x-3 border border-emerald-500"
+          >
+            <div className="p-2 bg-white/20 rounded-xl shrink-0">
+              <CheckCircle2 size={20} className="text-white" />
+            </div>
+            <div className="text-xs font-sans">
+              <p className="font-bold">E-mail Enviado ao Financeiro!</p>
+              <p className="opacity-90">{sendFinanceiroToast}</p>
+            </div>
+            <button
+              onClick={() => setSendFinanceiroToast(null)}
+              className="p-1 hover:bg-white/20 rounded-lg transition-colors ml-auto cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ==========================================
-          HEADER SECTION (Title & Stats Banner)
+          HEADER SECTION (Title & Sub-Tab Switcher)
           ========================================== */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0 bg-white border border-natural-border p-6 rounded-2xl shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center space-x-2.5">
             <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600">
-              <FileText size={20} />
+              {currentSubTab === 'financeiro' ? <DollarSign size={20} /> : <FileText size={20} />}
             </div>
             <h1 className="text-xl font-serif italic font-bold tracking-tight text-natural-text">
-              Gestão de Notas Fiscais
+              {currentSubTab === 'financeiro' ? 'Notas Fiscais - Módulo Financeiro' : 'Gestão de Notas Fiscais'}
             </h1>
           </div>
           <p className="text-xs text-natural-muted leading-relaxed">
-            Registre notas fiscais de hardware, recalcule itens, faça upload de boletos de cobrança e controle compras por empresa.
+            {currentSubTab === 'financeiro' 
+              ? 'Notas fiscais contendo Nota Fiscal e Boleto anexados estão aptas para envio direto ao departamento financeiro.' 
+              : 'Registre notas fiscais de hardware, vincule boletos de cobrança e controle compras das empresas Bio Brands e Bio Scientific.'}
           </p>
         </div>
 
-        <button
-          id="btn-register-nf"
-          onClick={() => handleOpenForm(null)}
-          className="bg-natural-primary hover:bg-natural-primary/95 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-natural-primary/10 hover:shadow-lg hover:shadow-natural-primary/15 transition-all flex items-center justify-center gap-2 cursor-pointer self-start md:self-auto"
-        >
-          <Plus size={16} />
-          Cadastrar Nota Fiscal
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* SubTab Toggle Bar */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200 text-xs font-medium">
+            <button
+              id="subtab-todas-notas"
+              type="button"
+              onClick={() => setInternalSubTab('todas')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                currentSubTab === 'todas'
+                  ? 'bg-white text-indigo-700 font-bold shadow-xs'
+                  : 'text-natural-muted hover:text-natural-text'
+              }`}
+            >
+              <FileSpreadsheet size={14} />
+              <span>Todas as Notas</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                currentSubTab === 'todas' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-200 text-slate-600'
+              }`}>
+                {totalNotasCount}
+              </span>
+            </button>
+
+            <button
+              id="subtab-financeiro-notas"
+              type="button"
+              onClick={() => setInternalSubTab('financeiro')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                currentSubTab === 'financeiro'
+                  ? 'bg-white text-emerald-700 font-bold shadow-xs'
+                  : 'text-natural-muted hover:text-natural-text'
+              }`}
+            >
+              <DollarSign size={14} />
+              <span>Financeiro</span>
+              {aptasFinanceiroCount > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                  currentSubTab === 'financeiro' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {aptasFinanceiroCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <button
+            id="btn-register-nf"
+            onClick={() => handleOpenForm(null)}
+            className="bg-natural-primary hover:bg-natural-primary/95 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-natural-primary/10 hover:shadow-lg hover:shadow-natural-primary/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Plus size={16} />
+            Cadastrar Nota Fiscal
+          </button>
+        </div>
       </div>
+
+      {/* Financeiro Sub-Tab Information Banner (When Financeiro Tab is active) */}
+      {currentSubTab === 'financeiro' && (
+        <div className="bg-emerald-50/70 border border-emerald-200/80 p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start md:items-center space-x-3">
+            <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0 mt-0.5 md:mt-0">
+              <MailCheck size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-emerald-950 flex items-center gap-2">
+                <span>Notas com Nota Fiscal e Boleto (Financeiro)</span>
+                <span className="text-[10px] bg-emerald-200/60 text-emerald-800 font-mono font-bold px-2 py-0.5 rounded-md">
+                  {pendentesEnvioFinanceiroCount} pendente{pendentesEnvioFinanceiroCount !== 1 ? 's' : ''} / {enviadasFinanceiroCount} enviada{enviadasFinanceiroCount !== 1 ? 's' : ''}
+                </span>
+              </p>
+              <p className="text-xs text-emerald-800 leading-relaxed mt-0.5">
+                Exibindo somente as notas fiscais que possuem o anexo do documento fiscal e o boleto bancário. Destinatário padrão: <strong className="font-mono underline">{EMAIL_FINANCEIRO_DESTINO}</strong>.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => handleSwitchSubTab('todas')}
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 bg-white border border-emerald-200 px-3 py-1.5 rounded-xl hover:bg-emerald-50 transition-colors shrink-0 cursor-pointer"
+          >
+            Ver Todas as Notas
+          </button>
+        </div>
+      )}
 
       {/* ==========================================
           STATS CARDS GRID
@@ -645,7 +914,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
         <div className="bg-white border border-natural-border p-5 rounded-2xl flex items-center justify-between shadow-xs">
           <div className="space-y-1">
             <span className="text-[10px] font-mono font-bold tracking-wider text-natural-muted uppercase">
-              Total Acumulado
+              {currentSubTab === 'financeiro' ? 'Valor Total (Financeiro)' : 'Total Acumulado'}
             </span>
             <div className="text-xl font-serif italic font-bold text-natural-text font-mono">
               {formatCurrency(stats.totalValue)}
@@ -659,28 +928,28 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
         <div className="bg-white border border-natural-border p-5 rounded-2xl flex items-center justify-between shadow-xs">
           <div className="space-y-1">
             <span className="text-[10px] font-mono font-bold tracking-wider text-natural-muted uppercase">
-              Notas Registradas
+              {currentSubTab === 'financeiro' ? 'Notas no Financeiro' : 'Notas Registradas'}
             </span>
             <div className="text-xl font-serif italic font-bold text-natural-text font-mono">
               {stats.count}
             </div>
           </div>
           <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600 border border-indigo-100">
-            <FileSpreadsheet size={20} />
+            {currentSubTab === 'financeiro' ? <DollarSign size={20} /> : <FileSpreadsheet size={20} />}
           </div>
         </div>
 
         <div className="bg-white border border-natural-border p-5 rounded-2xl flex items-center justify-between shadow-xs">
           <div className="space-y-1">
             <span className="text-[10px] font-mono font-bold tracking-wider text-natural-muted uppercase">
-              Qtd Itens Adquiridos
+              {currentSubTab === 'financeiro' ? 'Enviadas ao Financeiro' : 'Qtd Itens Adquiridos'}
             </span>
             <div className="text-xl font-serif italic font-bold text-natural-text font-mono">
-              {stats.itemsCount}
+              {currentSubTab === 'financeiro' ? enviadasFinanceiroCount : stats.itemsCount}
             </div>
           </div>
           <div className="p-3 bg-amber-50 rounded-xl text-amber-600 border border-amber-100">
-            <ShoppingCart size={20} />
+            {currentSubTab === 'financeiro' ? <Send size={20} /> : <ShoppingCart size={20} />}
           </div>
         </div>
       </div>
@@ -940,7 +1209,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                 </th>
 
                 {/* Ações */}
-                <th className="px-3 py-3 text-center w-[120px]">Ações</th>
+                <th className="px-3 py-3 text-center min-w-[140px]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-sans">
@@ -1031,17 +1300,29 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
 
                       {/* Anexos */}
                       <td className="px-3 py-3 whitespace-nowrap">
-                        <div className="flex items-center space-x-1">
+                        <div className="flex items-center space-x-1.5 flex-wrap">
                           {nf.notaFiscalFile && (
-                            <span className="text-[10px] bg-slate-50 border border-slate-200 text-natural-text px-1.5 py-0.5 rounded flex items-center font-mono" title={nf.notaFiscalFile.name}>
+                            <span className="text-[10px] bg-slate-50 border border-slate-200 text-natural-text px-1.5 py-0.5 rounded flex items-center font-mono" title={`Nota Fiscal: ${nf.notaFiscalFile.name}`}>
                               <FileText size={11} className="mr-0.5 text-indigo-500" />
                               NF
                             </span>
                           )}
-                          {nf.outrosArquivos && nf.outrosArquivos.length > 0 && (
+                          {(nf.boletoFile || (nf.outrosArquivos && nf.outrosArquivos.some(f => f.name.toLowerCase().includes('boleto') || f.name.toLowerCase().includes('fatura')))) && (
+                            <span className="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-1.5 py-0.5 rounded flex items-center font-mono" title="Boleto Bancário Anexado">
+                              <Receipt size={11} className="mr-0.5 text-emerald-600" />
+                              Boleto
+                            </span>
+                          )}
+                          {nf.outrosArquivos && nf.outrosArquivos.length > 0 && !nf.boletoFile && !nf.outrosArquivos.some(f => f.name.toLowerCase().includes('boleto')) && (
                             <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-700 px-1.5 py-0.5 rounded flex items-center font-mono" title={`${nf.outrosArquivos.length} outros anexos`}>
                               <File size={11} className="mr-0.5 text-amber-500" />
                               +{nf.outrosArquivos.length}
+                            </span>
+                          )}
+                          {nf.enviadoFinanceiro && (
+                            <span className="text-[9px] bg-emerald-100 border border-emerald-300 text-emerald-800 font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5" title={`Enviado ao Financeiro em ${nf.dataEnvioFinanceiro ? formatDateBR(nf.dataEnvioFinanceiro.split('T')[0]) : ''}`}>
+                              <CheckCircle2 size={10} className="text-emerald-700" />
+                              Enviado
                             </span>
                           )}
                         </div>
@@ -1055,6 +1336,27 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                       {/* Ações */}
                       <td className="px-3 py-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center space-x-1">
+                          {/* Botão Enviar ao Financeiro quando a nota está apta */}
+                          {isNotaAptaFinanceiro(nf) && (
+                            <button
+                              id={`btn-send-financeiro-${nf.id}`}
+                              onClick={() => handleOpenSendModal(nf)}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-xs ${
+                                nf.enviadoFinanceiro
+                                  ? 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                              }`}
+                              title={
+                                nf.enviadoFinanceiro
+                                  ? `Já enviado ao financeiro (${EMAIL_FINANCEIRO_DESTINO}). Clique para reenviar.`
+                                  : `Enviar para o departamento financeiro (${EMAIL_FINANCEIRO_DESTINO})`
+                              }
+                            >
+                              <Send size={11} />
+                              <span>{nf.enviadoFinanceiro ? 'Reenviar' : 'Enviar'}</span>
+                            </button>
+                          )}
+
                           <button
                             id={`btn-view-details-${nf.id}`}
                             onClick={() => setSelectedNotaForDetails(nf)}
@@ -1228,20 +1530,87 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                   </div>
                 </div>
 
-                {/* Document downloads row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Primary Invoice Document */}
-                  <div className="border border-natural-border p-4 rounded-xl space-y-3 bg-slate-50/40">
+                {/* Financeiro Status and Action Section */}
+                <div className="border border-natural-border rounded-xl p-4 bg-slate-50/60 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2">
-                      <FileText size={18} className="text-indigo-500" />
-                      <span className="text-xs font-semibold text-natural-text">Documento Fiscal Principal (XML/PDF)</span>
+                      <div className={`p-1.5 rounded-lg ${
+                        selectedNotaForDetails.enviadoFinanceiro 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : isNotaAptaFinanceiro(selectedNotaForDetails)
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-200 text-slate-600'
+                      }`}>
+                        {selectedNotaForDetails.enviadoFinanceiro ? <MailCheck size={16} /> : <DollarSign size={16} />}
+                      </div>
+                      <span className="text-xs font-bold text-natural-text uppercase font-mono tracking-wider">
+                        Status do Departamento Financeiro
+                      </span>
+                    </div>
+
+                    {isNotaAptaFinanceiro(selectedNotaForDetails) && (
+                      <button
+                        id={`btn-details-send-financeiro-${selectedNotaForDetails.id}`}
+                        onClick={() => handleOpenSendModal(selectedNotaForDetails)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                          selectedNotaForDetails.enviadoFinanceiro
+                            ? 'bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                        }`}
+                      >
+                        <Send size={13} />
+                        <span>{selectedNotaForDetails.enviadoFinanceiro ? 'Reenviar E-mail' : 'Enviar para o Financeiro'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedNotaForDetails.enviadoFinanceiro ? (
+                    <div className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200/80 p-3 rounded-lg flex items-start space-x-2.5">
+                      <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-bold">E-mail já transmitido ao Departamento Financeiro</p>
+                        <p className="text-emerald-800">
+                          Destinatário: <strong className="font-mono">{selectedNotaForDetails.emailEnvioFinanceiro || EMAIL_FINANCEIRO_DESTINO}</strong> • Data: <span className="font-mono">{selectedNotaForDetails.dataEnvioFinanceiro ? new Date(selectedNotaForDetails.dataEnvioFinanceiro).toLocaleString('pt-BR') : 'Data não registrada'}</span>
+                        </p>
+                      </div>
+                    </div>
+                  ) : isNotaAptaFinanceiro(selectedNotaForDetails) ? (
+                    <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200/80 p-3 rounded-lg flex items-start space-x-2.5">
+                      <CheckCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-bold">Nota Pronta para Envio</p>
+                        <p className="text-amber-800">
+                          A nota fiscal e o boleto bancário estão anexados e prontos para envio direto ao e-mail <strong className="font-mono">{EMAIL_FINANCEIRO_DESTINO}</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-600 bg-white border border-slate-200 p-3 rounded-lg flex items-start space-x-2.5">
+                      <Info size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-slate-700">Pendente de Anexos para o Financeiro</p>
+                        <p className="text-slate-500">
+                          Para habilitar o envio automático para o financeiro ({EMAIL_FINANCEIRO_DESTINO}), certifique-se de que tanto o <strong>Documento Fiscal</strong> quanto o <strong>Boleto Bancário</strong> estejam anexados.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Document downloads row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                  {/* Primary Invoice Document */}
+                  <div className="border border-natural-border p-3.5 rounded-xl space-y-2.5 bg-slate-50/40">
+                    <div className="flex items-center space-x-1.5">
+                      <FileText size={16} className="text-indigo-500" />
+                      <span className="text-xs font-semibold text-natural-text">Documento Fiscal (XML/PDF)</span>
                     </div>
                     
                     {selectedNotaForDetails.notaFiscalFile ? (
-                      <div className="flex items-center justify-between p-2.5 bg-white border border-natural-border rounded-lg text-xs font-mono">
-                        <div className="truncate pr-2">
+                      <div className="flex items-center justify-between p-2 bg-white border border-natural-border rounded-lg text-xs font-mono">
+                        <div className="truncate pr-1.5">
                           <span className="font-semibold block truncate text-natural-text">{selectedNotaForDetails.notaFiscalFile.name}</span>
-                          <span className="text-[10px] text-natural-muted block">{(selectedNotaForDetails.notaFiscalFile.size / 1024).toFixed(1)} KB</span>
+                          <span className="text-[9px] text-natural-muted block">{(selectedNotaForDetails.notaFiscalFile.size / 1024).toFixed(1)} KB</span>
                         </div>
                         <button
                           id={`btn-dl-primary-${selectedNotaForDetails.id}`}
@@ -1249,38 +1618,65 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                           className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-colors cursor-pointer shrink-0"
                           title="Download Arquivo"
                         >
-                          <Download size={14} />
+                          <Download size={13} />
                         </button>
                       </div>
                     ) : (
-                      <p className="text-xs italic text-natural-muted pl-1">Sem arquivo fiscal cadastrado.</p>
+                      <p className="text-xs italic text-natural-muted pl-0.5">Sem nota fiscal anexada.</p>
                     )}
                   </div>
 
-                  {/* Other Documents & Boletos */}
-                  <div className="border border-natural-border p-4 rounded-xl space-y-3 bg-slate-50/40">
-                    <div className="flex items-center space-x-2">
-                      <File size={18} className="text-amber-500" />
-                      <span className="text-xs font-semibold text-natural-text">Boletos e Outros Anexos</span>
+                  {/* Boleto Bancário */}
+                  <div className="border border-natural-border p-3.5 rounded-xl space-y-2.5 bg-slate-50/40">
+                    <div className="flex items-center space-x-1.5">
+                      <Receipt size={16} className="text-emerald-600" />
+                      <span className="text-xs font-semibold text-natural-text">Boleto Bancário / Fatura</span>
+                    </div>
+
+                    {selectedNotaForDetails.boletoFile ? (
+                      <div className="flex items-center justify-between p-2 bg-white border border-emerald-200 rounded-lg text-xs font-mono">
+                        <div className="truncate pr-1.5">
+                          <span className="font-semibold block truncate text-emerald-950">{selectedNotaForDetails.boletoFile.name}</span>
+                          <span className="text-[9px] text-emerald-700 block">{(selectedNotaForDetails.boletoFile.size / 1024).toFixed(1)} KB</span>
+                        </div>
+                        <button
+                          id={`btn-dl-boleto-${selectedNotaForDetails.id}`}
+                          onClick={() => handleSimulateDownload(selectedNotaForDetails.boletoFile!)}
+                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors cursor-pointer shrink-0"
+                          title="Download Boleto"
+                        >
+                          <Download size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs italic text-natural-muted pl-0.5">Nenhum boleto anexado.</p>
+                    )}
+                  </div>
+
+                  {/* Other Documents */}
+                  <div className="border border-natural-border p-3.5 rounded-xl space-y-2.5 bg-slate-50/40">
+                    <div className="flex items-center space-x-1.5">
+                      <File size={16} className="text-amber-500" />
+                      <span className="text-xs font-semibold text-natural-text">Outros Anexos</span>
                     </div>
 
                     {!selectedNotaForDetails.outrosArquivos || selectedNotaForDetails.outrosArquivos.length === 0 ? (
-                      <p className="text-xs italic text-natural-muted pl-1 py-1">Nenhum boleto ou anexo adicional anexado.</p>
+                      <p className="text-xs italic text-natural-muted pl-0.5">Sem outros arquivos.</p>
                     ) : (
-                      <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      <div className="space-y-1 max-h-28 overflow-y-auto">
                         {selectedNotaForDetails.outrosArquivos.map((file, i) => (
-                          <div key={i} className="flex items-center justify-between p-2 bg-white border border-natural-border rounded-lg text-xs font-mono">
-                            <div className="truncate pr-2">
-                              <span className="font-medium block truncate text-natural-text">{file.name}</span>
+                          <div key={i} className="flex items-center justify-between p-1.5 bg-white border border-natural-border rounded-lg text-xs font-mono">
+                            <div className="truncate pr-1.5">
+                              <span className="font-medium block truncate text-natural-text text-[11px]">{file.name}</span>
                               <span className="text-[9px] text-natural-muted block">{(file.size / 1024).toFixed(1)} KB</span>
                             </div>
                             <button
                               id={`btn-dl-other-${selectedNotaForDetails.id}-${i}`}
                               onClick={() => handleSimulateDownload(file)}
-                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer shrink-0"
+                              className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer shrink-0"
                               title="Download Arquivo"
                             >
-                              <Download size={12} />
+                              <Download size={11} />
                             </button>
                           </div>
                         ))}
@@ -1718,12 +2114,12 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
               </div>
 
               {/* 4. DRAG AND DROP FILE UPLOADS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-slate-100">
                 
                 {/* File Upload A: Nota Fiscal Principal */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-natural-text flex items-center justify-between">
-                    <span>Nota Fiscal Principal (PDF/XML) *</span>
+                    <span>Nota Fiscal Principal *</span>
                     <span className="text-[9px] text-red-500 bg-red-50 border border-red-100 font-bold px-1.5 py-0.5 rounded uppercase">Obrigatório</span>
                   </label>
 
@@ -1734,11 +2130,11 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     onDragLeave={handleDragPrimary}
                     onDrop={handleDropPrimary}
                     onClick={() => primaryFileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[120px] ${
+                    className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[125px] ${
                       dragActivePrimary 
                         ? 'border-indigo-600 bg-indigo-50/50' 
                         : notaFiscalFile 
-                          ? 'border-emerald-300 bg-emerald-50/10' 
+                          ? 'border-indigo-300 bg-indigo-50/10' 
                           : 'border-natural-border bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'
                     }`}
                   >
@@ -1752,37 +2148,95 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     />
 
                     {notaFiscalFile ? (
-                      <div className="space-y-1.5 w-full text-xs font-mono" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-1.5 bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg inline-flex items-center gap-1">
-                          <CheckCircle size={12} />
-                          <span>Pronto para Enviar</span>
+                      <div className="space-y-1 w-full text-xs font-mono" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-1 bg-indigo-100 border border-indigo-200 text-indigo-800 rounded-md inline-flex items-center gap-1 text-[10px]">
+                          <CheckCircle size={11} />
+                          <span>NF Carregada</span>
                         </div>
-                        <p className="font-semibold truncate text-natural-text px-2">{notaFiscalFile.name}</p>
-                        <p className="text-[10px] text-natural-muted">{(notaFiscalFile.size / 1024).toFixed(1)} KB</p>
+                        <p className="font-semibold truncate text-natural-text px-1 text-[11px]">{notaFiscalFile.name}</p>
+                        <p className="text-[9px] text-natural-muted">{(notaFiscalFile.size / 1024).toFixed(1)} KB</p>
                         <button
                           id="btn-remove-primary-file"
                           type="button"
                           onClick={handleRemovePrimaryFile}
-                          className="text-[10px] text-red-500 hover:text-red-700 underline font-bold pt-1 cursor-pointer"
+                          className="text-[10px] text-red-500 hover:text-red-700 underline font-bold pt-0.5 cursor-pointer"
                         >
-                          Remover Arquivo
+                          Remover
                         </button>
                       </div>
                     ) : (
                       <>
-                        <Upload size={24} className="text-slate-400 mb-1.5" />
-                        <span className="text-xs font-semibold text-indigo-600">Arraste ou clique para enviar a Nota</span>
-                        <span className="text-[10px] text-natural-muted mt-0.5">Suporta PDF, XML ou Imagens</span>
+                        <Upload size={20} className="text-slate-400 mb-1" />
+                        <span className="text-xs font-semibold text-indigo-600">Nota Fiscal (PDF/XML)</span>
+                        <span className="text-[9px] text-natural-muted mt-0.5">Arraste ou clique</span>
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* File Upload B: Other Attachments (Boletos) */}
-                <div className="space-y-2">
+                {/* File Upload B: Boleto Bancário / Cobrança */}
+                <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-natural-text flex items-center justify-between">
-                    <span>Boletos e Outros Arquivos (Opcional)</span>
-                    <span className="text-[9px] text-slate-500 bg-slate-100 border border-slate-200 font-bold px-1.5 py-0.5 rounded uppercase">Anexos</span>
+                    <span>Boleto Bancário</span>
+                    <span className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-1.5 py-0.5 rounded uppercase">Financeiro</span>
+                  </label>
+
+                  <div 
+                    id="drag-boleto-container"
+                    onDragEnter={handleDragBoleto}
+                    onDragOver={handleDragBoleto}
+                    onDragLeave={handleDragBoleto}
+                    onDrop={handleDropBoleto}
+                    onClick={() => boletoFileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[125px] ${
+                      dragActiveBoleto 
+                        ? 'border-emerald-600 bg-emerald-50/50' 
+                        : boletoFile 
+                          ? 'border-emerald-300 bg-emerald-50/20' 
+                          : 'border-natural-border bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      id="input-file-boleto"
+                      ref={boletoFileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.png"
+                      onChange={handleSelectBoleto}
+                      className="hidden"
+                    />
+
+                    {boletoFile ? (
+                      <div className="space-y-1 w-full text-xs font-mono" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-1 bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-md inline-flex items-center gap-1 text-[10px]">
+                          <Receipt size={11} />
+                          <span>Boleto Carregado</span>
+                        </div>
+                        <p className="font-semibold truncate text-natural-text px-1 text-[11px]">{boletoFile.name}</p>
+                        <p className="text-[9px] text-natural-muted">{(boletoFile.size / 1024).toFixed(1)} KB</p>
+                        <button
+                          id="btn-remove-boleto-file"
+                          type="button"
+                          onClick={handleRemoveBoletoFile}
+                          className="text-[10px] text-red-500 hover:text-red-700 underline font-bold pt-0.5 cursor-pointer"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <Receipt size={20} className="text-emerald-600 mb-1" />
+                        <span className="text-xs font-semibold text-emerald-700">Boleto / Fatura</span>
+                        <span className="text-[9px] text-natural-muted mt-0.5">Habilita envio ao Financeiro</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* File Upload C: Other Attachments */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-natural-text flex items-center justify-between">
+                    <span>Outros Anexos</span>
+                    <span className="text-[9px] text-slate-500 bg-slate-100 border border-slate-200 font-bold px-1.5 py-0.5 rounded uppercase">Opcional</span>
                   </label>
 
                   <div 
@@ -1792,11 +2246,11 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     onDragLeave={handleDragOthers}
                     onDrop={handleDropOthers}
                     onClick={() => othersFileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[120px] ${
+                    className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[125px] ${
                       dragActiveOthers 
                         ? 'border-indigo-600 bg-indigo-50/50' 
                         : outrosArquivos.length > 0
-                          ? 'border-indigo-300 bg-indigo-50/10' 
+                          ? 'border-slate-300 bg-slate-50' 
                           : 'border-natural-border bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'
                     }`}
                   >
@@ -1805,28 +2259,28 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                       ref={othersFileInputRef}
                       type="file"
                       multiple
-                      accept=".pdf,.jpg,.png"
+                      accept=".pdf,.jpg,.png,.xml,.doc,.docx"
                       onChange={handleSelectOthers}
                       className="hidden"
                     />
 
-                    <Upload size={24} className="text-slate-400 mb-1.5" />
-                    <span className="text-xs font-semibold text-slate-700">Adicione boletos de pagamento</span>
-                    <span className="text-[10px] text-natural-muted mt-0.5">Clique ou arraste múltiplos arquivos</span>
+                    <Upload size={20} className="text-slate-400 mb-1" />
+                    <span className="text-xs font-semibold text-slate-700">Comprovantes / Recibos</span>
+                    <span className="text-[9px] text-natural-muted mt-0.5">Múltiplos arquivos</span>
 
                     {outrosArquivos.length > 0 && (
-                      <div className="mt-2.5 w-full text-[10px] font-mono space-y-1" onClick={(e) => e.stopPropagation()}>
-                        <div className="border-t border-slate-200/60 pt-2 text-left">
-                          <p className="font-bold text-natural-text mb-1">Arquivos adicionados ({outrosArquivos.length}):</p>
-                          <div className="max-h-20 overflow-y-auto space-y-1">
+                      <div className="mt-1.5 w-full text-[10px] font-mono space-y-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="border-t border-slate-200/60 pt-1 text-left">
+                          <p className="font-bold text-natural-text mb-0.5">Arquivos ({outrosArquivos.length}):</p>
+                          <div className="max-h-16 overflow-y-auto space-y-0.5">
                             {outrosArquivos.map((file, i) => (
-                              <div key={i} className="flex items-center justify-between bg-white border border-slate-100 p-1 rounded">
-                                <span className="truncate max-w-[140px] text-natural-text">{file.name}</span>
+                              <div key={i} className="flex items-center justify-between bg-white border border-slate-100 px-1 py-0.5 rounded text-[10px]">
+                                <span className="truncate max-w-[90px] text-natural-text">{file.name}</span>
                                 <button 
                                   id={`btn-remove-other-${i}`}
                                   type="button" 
                                   onClick={() => handleRemoveOtherFile(i)}
-                                  className="text-red-500 hover:text-red-700 px-1 font-bold"
+                                  className="text-red-500 hover:text-red-700 px-1 font-bold cursor-pointer"
                                 >
                                   ×
                                 </button>
@@ -1882,6 +2336,211 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                   {editingNota ? 'Salvar Alterações' : 'Cadastrar Nota'}
                 </button>
               </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ==========================================
+          MODAL: ENVIAR AO DEPARTAMENTO FINANCEIRO
+          ========================================== */}
+      {notaToSendToFinanceiro && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0" 
+            onClick={() => {
+              if (!isSendingFinanceiroEmail) {
+                setNotaToSendToFinanceiro(null);
+              }
+            }} 
+          />
+          
+          <motion.div
+            id="modal-send-financeiro"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl border border-natural-border shadow-2xl max-w-lg w-full p-6 relative z-10 space-y-5"
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl">
+                  <MailCheck size={22} />
+                </div>
+                <div>
+                  <h3 className="font-serif italic text-base font-bold text-natural-text">
+                    Enviar para o Departamento Financeiro
+                  </h3>
+                  <p className="text-xs text-natural-muted mt-0.5">
+                    Destinatário: <strong className="font-mono text-emerald-800">{EMAIL_FINANCEIRO_DESTINO}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {!isSendingFinanceiroEmail && (
+                <button
+                  id="btn-close-send-modal"
+                  onClick={() => setNotaToSendToFinanceiro(null)}
+                  className="p-1.5 text-natural-muted hover:text-natural-text hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {/* Question confirmation prompt */}
+            <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-2">
+              <p className="text-xs font-semibold text-emerald-950 leading-relaxed">
+                Deseja enviar esta Nota Fiscal e o Boleto anexados para o departamento financeiro?
+              </p>
+              <p className="text-xs text-emerald-800 leading-relaxed">
+                Caso confirmado, será disparado um e-mail para <strong className="font-mono">{EMAIL_FINANCEIRO_DESTINO}</strong> contendo o comprovante fiscal, o boleto de pagamento e o descritivo de itens.
+              </p>
+            </div>
+
+            {/* Invoice & Attachments summary */}
+            <div className="space-y-3 font-sans text-xs">
+              <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-50 border border-slate-200 p-3 rounded-xl">
+                <div>
+                  <span className="text-natural-muted block text-[10px]">Nota Fiscal:</span>
+                  <span className="font-bold text-natural-text">Nº {cleanNumeroNF(notaToSendToFinanceiro.numero)}</span>
+                </div>
+                <div>
+                  <span className="text-natural-muted block text-[10px]">Empresa / Filial:</span>
+                  <span className="font-bold text-natural-text">{notaToSendToFinanceiro.empresa} ({notaToSendToFinanceiro.filial || '-'})</span>
+                </div>
+                <div>
+                  <span className="text-natural-muted block text-[10px]">Fornecedor:</span>
+                  <span className="font-bold text-natural-text truncate block">{notaToSendToFinanceiro.emissor}</span>
+                </div>
+                <div>
+                  <span className="text-natural-muted block text-[10px]">Valor Total:</span>
+                  <span className="font-bold text-emerald-700">{formatCurrency(notaToSendToFinanceiro.valorTotalNota)}</span>
+                </div>
+                {notaToSendToFinanceiro.numeroPedido && (
+                  <div>
+                    <span className="text-natural-muted block text-[10px]">N. Pedido:</span>
+                    <span className="font-bold text-natural-text">{notaToSendToFinanceiro.numeroPedido}</span>
+                  </div>
+                )}
+                {notaToSendToFinanceiro.dataVencimento && (
+                  <div>
+                    <span className="text-natural-muted block text-[10px]">Vencimento:</span>
+                    <span className="font-bold text-natural-text">{formatDateBR(notaToSendToFinanceiro.dataVencimento)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Anexos confirmados */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-natural-muted uppercase font-mono tracking-wider">
+                  Arquivos em Anexo no E-mail
+                </span>
+                <div className="space-y-1">
+                  {/* NF Principal */}
+                  <div className="flex items-center justify-between p-2 bg-indigo-50/50 border border-indigo-100 rounded-lg text-xs font-mono">
+                    <div className="flex items-center space-x-2 truncate">
+                      <FileText size={14} className="text-indigo-600 shrink-0" />
+                      <span className="truncate font-medium text-slate-800">
+                        {notaToSendToFinanceiro.notaFiscalFile?.name || 'NotaFiscal.pdf'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded shrink-0">
+                      Documento Fiscal
+                    </span>
+                  </div>
+
+                  {/* Boleto Bancário */}
+                  <div className="flex items-center justify-between p-2 bg-emerald-50/50 border border-emerald-100 rounded-lg text-xs font-mono">
+                    <div className="flex items-center space-x-2 truncate">
+                      <Receipt size={14} className="text-emerald-600 shrink-0" />
+                      <span className="truncate font-medium text-slate-800">
+                        {notaToSendToFinanceiro.boletoFile?.name || 
+                          notaToSendToFinanceiro.outrosArquivos?.find(f => f.name.toLowerCase().includes('boleto') || f.name.toLowerCase().includes('fatura'))?.name || 
+                          'Boleto_Bancario.pdf'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded shrink-0">
+                      Boleto Bancário
+                    </span>
+                  </div>
+
+                  {/* Outros arquivos */}
+                  {notaToSendToFinanceiro.outrosArquivos && notaToSendToFinanceiro.outrosArquivos.length > 0 && (
+                    <p className="text-[10px] text-natural-muted font-mono pl-1">
+                      + {notaToSendToFinanceiro.outrosArquivos.length} anexo(s) adicional(is)
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Simulated Transmission Steps progress */}
+            {isSendingFinanceiroEmail && (
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between text-[11px] font-bold text-natural-text">
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 size={13} className="animate-spin text-emerald-600" />
+                    Transmitindo e-mail corporativo...
+                  </span>
+                  <span className="text-emerald-700">{sendFinanceiroStep * 25}%</span>
+                </div>
+
+                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-emerald-600 h-full transition-all duration-300 ease-out" 
+                    style={{ width: `${sendFinanceiroStep * 25}%` }} 
+                  />
+                </div>
+
+                <div className="text-[10px] text-natural-muted space-y-0.5">
+                  <p className={sendFinanceiroStep >= 1 ? 'text-emerald-700 font-bold' : ''}>
+                    {sendFinanceiroStep >= 1 ? '✓' : '•'} 1. Conexão segura estabelecida com servidor de e-mail
+                  </p>
+                  <p className={sendFinanceiroStep >= 2 ? 'text-emerald-700 font-bold' : ''}>
+                    {sendFinanceiroStep >= 2 ? '✓' : '•'} 2. Anexando Nota Fiscal e Boleto Bancário
+                  </p>
+                  <p className={sendFinanceiroStep >= 3 ? 'text-emerald-700 font-bold' : ''}>
+                    {sendFinanceiroStep >= 3 ? '✓' : '•'} 3. Enviando mensagem para {EMAIL_FINANCEIRO_DESTINO}
+                  </p>
+                  <p className={sendFinanceiroStep >= 4 ? 'text-emerald-700 font-bold' : ''}>
+                    {sendFinanceiroStep >= 4 ? '✓' : '•'} 4. Confirmação de recebimento registrada!
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end space-x-2.5 pt-2 border-t border-slate-100">
+              <button
+                id="btn-cancel-send-financeiro"
+                type="button"
+                disabled={isSendingFinanceiroEmail}
+                onClick={() => setNotaToSendToFinanceiro(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-natural-text rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                id="btn-confirm-send-financeiro"
+                type="button"
+                disabled={isSendingFinanceiroEmail}
+                onClick={handleConfirmSendToFinanceiro}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isSendingFinanceiroEmail ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Enviando E-mail...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} />
+                    <span>Confirmar e Enviar E-mail</span>
+                  </>
+                )}
+              </button>
             </div>
           </motion.div>
         </div>

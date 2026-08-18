@@ -1,4 +1,4 @@
-import { Colaborador, EmpresaFilial } from './types';
+import { Colaborador, EmpresaFilial, NotaFiscal } from './types';
 
 export const INITIAL_COLABORADORES: Colaborador[] = [];
 
@@ -789,4 +789,23 @@ export const INITIAL_EMPRESAS_FILIAIS: EmpresaFilial[] = [
     ativo: true
   }
 ];
+
+export const EMAIL_FINANCEIRO_DESTINO = 'fabiorodrigues@bioscientific.ind.br';
+
+export function isNotaAptaFinanceiro(nota: NotaFiscal): boolean {
+  if (!nota) return false;
+  // 1. Deve conter a Nota Fiscal anexada
+  const hasNF = Boolean(nota.notaFiscalFile && nota.notaFiscalFile.name);
+
+  // 2. Deve conter o Boleto anexado (via boletoFile dedicado ou em outrosArquivos com identificação de boleto/fatura)
+  const hasBoleto = Boolean(
+    (nota.boletoFile && nota.boletoFile.name) ||
+    (nota.outrosArquivos && nota.outrosArquivos.length > 0 && nota.outrosArquivos.some(a => {
+      const n = (a.name || '').toLowerCase();
+      return n.includes('boleto') || n.includes('bol') || n.includes('fatura') || n.includes('duplicata') || n.includes('pagamento');
+    }))
+  );
+
+  return hasNF && hasBoleto;
+}
 

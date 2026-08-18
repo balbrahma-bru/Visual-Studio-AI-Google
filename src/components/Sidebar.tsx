@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Users, 
   LayoutDashboard, 
@@ -10,11 +10,34 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
-  PanelLeftClose,
+  Building2,
+  Receipt,
+  Send,
+  Wallet,
+  ChevronDown,
   PanelLeftOpen,
-  Building2
+  PanelLeftClose
 } from 'lucide-react';
-import { ActiveTab } from '../types';
+import { ActiveTab, NotaFiscal } from '../types';
+import { isNotaAptaFinanceiro } from '../data';
+
+interface SubMenuItem {
+  id: ActiveTab;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  badge?: string;
+  badgeColor?: string;
+  count?: number;
+}
+
+interface MenuItem {
+  id: ActiveTab;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  description: string;
+  isParent?: boolean;
+  subItems?: SubMenuItem[];
+}
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -23,6 +46,7 @@ interface SidebarProps {
   toggleSidebar: () => void;
   isCollapsed: boolean;
   toggleCollapse: () => void;
+  notasFiscais?: NotaFiscal[];
 }
 
 export default function Sidebar({ 
@@ -31,9 +55,16 @@ export default function Sidebar({
   isOpen, 
   toggleSidebar,
   isCollapsed,
-  toggleCollapse
+  toggleCollapse,
+  notasFiscais = []
 }: SidebarProps) {
-  const menuItems = [
+  const [isNotasDropdownOpen, setIsNotasDropdownOpen] = React.useState<boolean>(true);
+
+  const aptasCount = useMemo(() => {
+    return (notasFiscais || []).filter(isNotaAptaFinanceiro).length;
+  }, [notasFiscais]);
+
+  const menuItems: MenuItem[] = [
     {
       id: 'dashboard' as ActiveTab,
       label: 'Painel Geral',
@@ -68,7 +99,17 @@ export default function Sidebar({
       id: 'notas_fiscais' as ActiveTab,
       label: 'Notas Fiscais',
       icon: FileText,
-      description: 'Gestão de notas, itens e anexos'
+      description: 'Gestão de notas, itens e anexos',
+      isParent: true,
+      subItems: [
+        {
+          id: 'financeiro' as ActiveTab,
+          label: 'Financeiro',
+          icon: Send,
+          badge: aptasCount > 0 ? `${aptasCount}` : undefined,
+          badgeColor: 'bg-emerald-500 text-white'
+        }
+      ]
     },
     {
       id: 'administracao' as ActiveTab,
@@ -80,6 +121,9 @@ export default function Sidebar({
 
   const handleNav = (tabId: ActiveTab) => {
     setActiveTab(tabId);
+    if (tabId === 'notas_fiscais' || tabId === 'financeiro') {
+      setIsNotasDropdownOpen(true);
+    }
     if (window.innerWidth < 1024) {
       toggleSidebar(); // Close sidebar on mobile after clicking
     }
@@ -157,43 +201,115 @@ export default function Sidebar({
 
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isItemActive = activeTab === item.id || (item.isParent && (activeTab === 'notas_fiscais' || activeTab === 'financeiro'));
             const collapsedDesktop = isCollapsed;
 
             return (
-              <button
-                key={item.id}
-                id={`sidebar-link-${item.id}`}
-                onClick={() => handleNav(item.id)}
-                title={collapsedDesktop ? item.label : undefined}
-                className={`w-full flex items-center rounded-xl transition-all group cursor-pointer ${
-                  collapsedDesktop ? 'lg:justify-center lg:px-0 lg:py-3 px-3.5 py-3' : 'px-3.5 py-3'
-                } ${
-                  isActive
-                    ? 'bg-natural-accent text-natural-primary font-semibold shadow-xs'
-                    : 'text-natural-accent hover:bg-natural-hover hover:text-white'
-                }`}
-              >
-                <Icon 
-                  size={20} 
-                  className={`shrink-0 transition-colors ${
-                    isActive ? 'text-natural-primary' : 'text-natural-accent group-hover:text-white'
-                  }`} 
-                />
+              <div key={item.id} className="space-y-1">
+                <button
+                  id={`sidebar-link-${item.id}`}
+                  onClick={() => handleNav(item.id)}
+                  title={collapsedDesktop ? item.label : undefined}
+                  className={`w-full flex items-center rounded-xl transition-all group cursor-pointer ${
+                    collapsedDesktop ? 'lg:justify-center lg:px-0 lg:py-3 px-3.5 py-3' : 'px-3.5 py-3'
+                  } ${
+                    isItemActive && (!item.subItems || activeTab === item.id)
+                      ? 'bg-natural-accent text-natural-primary font-semibold shadow-xs'
+                      : isItemActive
+                        ? 'bg-natural-hover/60 text-white font-medium'
+                        : 'text-natural-accent hover:bg-natural-hover hover:text-white'
+                  }`}
+                >
+                  <Icon 
+                    size={20} 
+                    className={`shrink-0 transition-colors ${
+                      isItemActive && (!item.subItems || activeTab === item.id)
+                        ? 'text-natural-primary' 
+                        : 'text-natural-accent group-hover:text-white'
+                    }`} 
+                  />
 
-                {(!collapsedDesktop || window.innerWidth < 1024) && (
-                  <div className="ml-3 flex-1 min-w-0 text-left">
-                    <span className="font-medium text-xs md:text-sm block leading-snug truncate">
-                      {item.label}
-                    </span>
-                    <span className={`text-[10px] block truncate ${
-                      isActive ? 'text-natural-primary/75 font-normal' : 'text-natural-gray-text'
-                    }`}>
-                      {item.description}
-                    </span>
+                  {(!collapsedDesktop || window.innerWidth < 1024) && (
+                    <div className="ml-3 flex-1 min-w-0 text-left flex items-center justify-between">
+                      <div className="min-w-0 pr-1">
+                        <span className="font-medium text-xs md:text-sm block leading-snug truncate">
+                          {item.label}
+                        </span>
+                        <span className={`text-[10px] block truncate ${
+                          isItemActive ? 'text-white/80 font-normal' : 'text-natural-gray-text'
+                        }`}>
+                          {item.description}
+                        </span>
+                      </div>
+                      {item.isParent && (
+                        <div
+                          role="button"
+                          id={`toggle-dropdown-${item.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsNotasDropdownOpen(!isNotasDropdownOpen);
+                          }}
+                          className="p-1 rounded-md hover:bg-natural-primary/20 text-natural-accent/80 hover:text-white transition-colors cursor-pointer"
+                          title={isNotasDropdownOpen ? "Recolher submenu" : "Expandir submenu"}
+                        >
+                          <ChevronDown 
+                            size={14} 
+                            className={`shrink-0 transition-transform duration-200 ${
+                              isNotasDropdownOpen ? 'rotate-180 text-white' : ''
+                            }`} 
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </button>
+
+                {/* Sub-items for Notas Fiscais (Financeiro Submenu) */}
+                {item.subItems && isNotasDropdownOpen && (!collapsedDesktop || window.innerWidth < 1024) && (
+                  <div className="pl-4 pr-1 py-1 space-y-1 border-l-2 border-natural-hover/50 ml-5 my-1">
+                    {item.subItems.map((sub) => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeTab === sub.id;
+
+                      return (
+                        <button
+                          key={sub.id}
+                          id={`sidebar-sublink-${sub.id}`}
+                          onClick={() => handleNav(sub.id)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all cursor-pointer ${
+                            isSubActive
+                              ? 'bg-natural-accent text-natural-primary font-bold shadow-xs'
+                              : 'text-natural-accent/90 hover:bg-natural-hover hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <SubIcon size={14} className={isSubActive ? 'text-natural-primary' : 'text-natural-accent/70'} />
+                            <span className="truncate">{sub.label}</span>
+                          </div>
+
+                          {sub.badge && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full font-mono shrink-0 ml-1.5 ${
+                              isSubActive 
+                                ? 'bg-natural-primary text-natural-accent' 
+                                : sub.badgeColor || 'bg-slate-700 text-slate-300'
+                            }`}>
+                              {sub.badge}
+                            </span>
+                          )}
+
+                          {sub.count !== undefined && !sub.badge && (
+                            <span className={`text-[10px] font-mono shrink-0 ml-1 ${
+                              isSubActive ? 'text-natural-primary/80 font-bold' : 'text-natural-gray-text'
+                            }`}>
+                              ({sub.count})
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </nav>
