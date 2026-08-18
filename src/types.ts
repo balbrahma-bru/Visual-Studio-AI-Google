@@ -64,6 +64,7 @@ export interface EmpresaFilial {
 
 export interface NotaFiscalItem {
   id: string;
+  codigoTotvs?: string;
   quantidade: number;
   descricao: string;
   valorUnitario: number;
@@ -88,6 +89,9 @@ export interface NotaFiscal {
   empresa: 'Bio Brands' | 'Bio Scientific';
   filial?: string;
   contrato?: string;
+  numeroPedido?: string;
+  natureza?: string;
+  cdc?: string;
   itens: NotaFiscalItem[];
   notaFiscalFile?: NotaFiscalAnexo | null;
   outrosArquivos?: NotaFiscalAnexo[];

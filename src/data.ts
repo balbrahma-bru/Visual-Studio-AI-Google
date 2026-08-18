@@ -304,6 +304,9 @@ export const INITIAL_NOTAS_FISCAIS = [
     empresa: 'Bio Brands',
     filial: 'Moema',
     contrato: 'CTR-2026-089',
+    numeroPedido: '104829',
+    natureza: '11020',
+    cdc: '020101',
     observacoes: 'Aquisição de notebooks corporativos de alta performance.',
     notaFiscalFile: {
       name: 'NF_DELL_124981.pdf',
@@ -320,6 +323,7 @@ export const INITIAL_NOTAS_FISCAIS = [
     itens: [
       {
         id: 'nfi-1-1',
+        codigoTotvs: '0001048291',
         quantidade: 2,
         descricao: 'Notebook Dell Latitude 3440 Intel Core i5 16GB RAM 512GB SSD',
         valorUnitario: 5499.00,
@@ -327,6 +331,7 @@ export const INITIAL_NOTAS_FISCAIS = [
       },
       {
         id: 'nfi-1-2',
+        codigoTotvs: '0001048292',
         quantidade: 1,
         descricao: 'Monitor Dell 27" SE2722H Full HD HDMI/VGA',
         valorUnitario: 1250.00,
@@ -334,6 +339,7 @@ export const INITIAL_NOTAS_FISCAIS = [
       },
       {
         id: 'nfi-1-3',
+        codigoTotvs: '0001048293',
         quantidade: 5,
         descricao: 'Kit Mouse e Teclado Sem Fio Dell KM3322W USB',
         valorUnitario: 250.00,
@@ -352,6 +358,9 @@ export const INITIAL_NOTAS_FISCAIS = [
     empresa: 'Bio Scientific',
     filial: 'Matriz',
     contrato: 'CTR-2026-014',
+    numeroPedido: '208451',
+    natureza: '21050',
+    cdc: '030204',
     observacoes: 'Substituição de equipamentos laboratoriais e calibradores.',
     notaFiscalFile: {
       name: 'NF_ALPHA_054312.pdf',
@@ -373,6 +382,7 @@ export const INITIAL_NOTAS_FISCAIS = [
     itens: [
       {
         id: 'nfi-2-1',
+        codigoTotvs: '0002084511',
         quantidade: 1,
         descricao: 'Balança de Precisão Analítica Bio-Precision 0.1mg',
         valorUnitario: 18500.00,
@@ -380,6 +390,7 @@ export const INITIAL_NOTAS_FISCAIS = [
       },
       {
         id: 'nfi-2-2',
+        codigoTotvs: '0002084512',
         quantidade: 2,
         descricao: 'Termômetro Digital Científico Calibrado RBC',
         valorUnitario: 3000.00,

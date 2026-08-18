@@ -32,7 +32,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { NotaFiscal, NotaFiscalItem, NotaFiscalAnexo, UserSettings, EmpresaFilial } from '../types';
 import { FILIAIS_BY_EMPRESA } from '../data';
 
-type NFSortField = 'dataEmissao' | 'numero' | 'empresa' | 'filial' | 'emissor' | 'dataVencimento' | 'valorTotalNota';
+type NFSortField = 'dataEmissao' | 'numero' | 'empresa' | 'filial' | 'emissor' | 'numeroPedido' | 'dataVencimento' | 'valorTotalNota';
 type NFSortOrder = 'asc' | 'desc';
 
 interface NotaFiscalListProps {
@@ -116,6 +116,9 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
   const [empresa, setEmpresa] = useState<'Bio Brands' | 'Bio Scientific'>('Bio Brands');
   const [filial, setFilial] = useState('ALPHAVILLE');
   const [contrato, setContrato] = useState('');
+  const [numeroPedido, setNumeroPedido] = useState('');
+  const [natureza, setNatureza] = useState('');
+  const [cdc, setCdc] = useState('');
   const [observacoes, setObservacoes] = useState('');
   
   // File attachments state
@@ -143,6 +146,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
   };
   
   // Temporary fields for adding a single item
+  const [tempCodigoTotvs, setTempCodigoTotvs] = useState('');
   const [tempDescricao, setTempDescricao] = useState('');
   const [tempQuantidade, setTempQuantidade] = useState<number>(1);
   const [tempValorUnitario, setTempValorUnitario] = useState<number>(0);
@@ -214,6 +218,9 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       const matched = available.find(f => f.trim().toLowerCase() === (nota.filial || '').trim().toLowerCase());
       setFilial(matched || nota.filial || available[0] || '');
       setContrato(nota.contrato || '');
+      setNumeroPedido(nota.numeroPedido || '');
+      setNatureza(nota.natureza || '');
+      setCdc(nota.cdc || '');
       setObservacoes(nota.observacoes || '');
       setNotaFiscalFile(nota.notaFiscalFile || null);
       setOutrosArquivos(nota.outrosArquivos || []);
@@ -228,6 +235,9 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       const available = getFiliaisForEmpresa('Bio Brands', empresasFiliais);
       setFilial(available[0] || 'ALPHAVILLE');
       setContrato('');
+      setNumeroPedido('');
+      setNatureza('');
+      setCdc('');
       setObservacoes('');
       setNotaFiscalFile(null);
       setOutrosArquivos([]);
@@ -235,6 +245,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     }
     
     // Clear temp item
+    setTempCodigoTotvs('');
     setTempDescricao('');
     setTempQuantidade(1);
     setTempValorUnitario(0);
@@ -255,6 +266,9 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     const matched = available.find(f => f.trim().toLowerCase() === (nota.filial || '').trim().toLowerCase());
     setFilial(matched || nota.filial || available[0] || '');
     setContrato(nota.contrato || '');
+    setNumeroPedido(nota.numeroPedido || '');
+    setNatureza(nota.natureza || '');
+    setCdc(nota.cdc || '');
     setObservacoes(nota.observacoes || '');
     setNotaFiscalFile(null); // Anexos ficam Null
     setOutrosArquivos([]); // Anexos adicionais ficam Null / Vazios
@@ -266,6 +280,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     );
 
     // Clear temp item
+    setTempCodigoTotvs('');
     setTempDescricao('');
     setTempQuantidade(1);
     setTempValorUnitario(0);
@@ -384,6 +399,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
 
     const newItem: NotaFiscalItem = {
       id: `item-${Date.now()}`,
+      codigoTotvs: tempCodigoTotvs.trim() || undefined,
       descricao: tempDescricao.trim(),
       quantidade: tempQuantidade,
       valorUnitario: tempValorUnitario,
@@ -391,6 +407,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
     };
 
     setItens(prev => [...prev, newItem]);
+    setTempCodigoTotvs('');
     setTempDescricao('');
     setTempQuantidade(1);
     setTempValorUnitario(0);
@@ -444,6 +461,9 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
       empresa,
       filial: filial || filialOptions[0] || '',
       contrato: contrato.trim(),
+      numeroPedido: numeroPedido.trim() || undefined,
+      natureza: natureza.trim() || undefined,
+      cdc: cdc.trim() || undefined,
       itens,
       notaFiscalFile,
       outrosArquivos,
@@ -494,10 +514,13 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
           nf.numero.toLowerCase().includes(query) ||
           cleanNumeroNF(nf.numero).toLowerCase().includes(query) ||
           nf.emissor.toLowerCase().includes(query) ||
+          (nf.numeroPedido && nf.numeroPedido.toLowerCase().includes(query)) ||
+          (nf.natureza && nf.natureza.toLowerCase().includes(query)) ||
+          (nf.cdc && nf.cdc.toLowerCase().includes(query)) ||
           (nf.filial && nf.filial.toLowerCase().includes(query)) ||
           (nf.contrato && nf.contrato.toLowerCase().includes(query)) ||
           (nf.observacoes && nf.observacoes.toLowerCase().includes(query)) ||
-          (nf.itens && nf.itens.some(item => item.descricao.toLowerCase().includes(query)));
+          (nf.itens && nf.itens.some(item => item.descricao.toLowerCase().includes(query) || (item.codigoTotvs && item.codigoTotvs.toLowerCase().includes(query))));
 
         // 2. Company Filter
         const matchesEmpresa = selectedEmpresa === 'All' || nf.empresa === selectedEmpresa;
@@ -530,6 +553,8 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
           comparison = (a.filial || '').localeCompare(b.filial || '', 'pt-BR', { sensitivity: 'base' });
         } else if (sortField === 'emissor') {
           comparison = (a.emissor || '').localeCompare(b.emissor || '', 'pt-BR', { sensitivity: 'base' });
+        } else if (sortField === 'numeroPedido') {
+          comparison = (a.numeroPedido || '').localeCompare(b.numeroPedido || '', 'pt-BR', { numeric: true, sensitivity: 'base' });
         } else if (sortField === 'dataVencimento') {
           const valA = (a.dataVencimento || '').trim();
           const valB = (b.dataVencimento || '').trim();
@@ -845,6 +870,28 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                   </div>
                 </th>
 
+                {/* N. Pedido */}
+                <th
+                  className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
+                  onClick={() => handleSort('numeroPedido')}
+                  title="Clique para ordenar por N. Pedido"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className={sortField === 'numeroPedido' ? 'text-indigo-600 font-bold' : ''}>
+                      N. Pedido
+                    </span>
+                    {sortField === 'numeroPedido' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-indigo-600 shrink-0" />
+                      ) : (
+                        <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-40 group-hover:opacity-100 shrink-0" />
+                    )}
+                  </div>
+                </th>
+
                 {/* Data Vencimento */}
                 <th
                   className="px-3 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition-colors group"
@@ -900,7 +947,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
               <AnimatePresence mode="popLayout">
                 {filteredNotas.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center text-natural-muted">
+                    <td colSpan={10} className="px-6 py-12 text-center text-natural-muted">
                       <FileText size={36} className="mx-auto mb-2 text-slate-300" />
                       <p className="text-sm font-medium">Nenhuma nota fiscal encontrada.</p>
                       <p className="text-xs text-natural-muted mt-0.5">
@@ -958,6 +1005,17 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                         <span className="font-semibold text-natural-text block truncate" title={nf.emissor}>
                           {getShortEmissorName(nf.emissor)}
                         </span>
+                      </td>
+
+                      {/* N. Pedido */}
+                      <td className="px-3 py-3 whitespace-nowrap font-mono text-xs">
+                        {nf.numeroPedido ? (
+                          <span className="font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[11px]">
+                            {nf.numeroPedido}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">-</span>
+                        )}
                       </td>
 
                       {/* Data Vencimento */}
@@ -1095,28 +1153,40 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
               {/* Scrollable details content */}
               <div className="p-6 overflow-y-auto space-y-6 flex-1">
                 {/* Quick Summary Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 text-xs font-mono">
-                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 text-xs font-mono">
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
                     <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Data Emissão</span>
-                    <span className="text-natural-text font-bold block">{formatDateBR(selectedNotaForDetails.dataEmissao)}</span>
+                    <span className="text-natural-text font-bold block truncate">{formatDateBR(selectedNotaForDetails.dataEmissao)}</span>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
-                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Data Vencimento</span>
-                    <span className="text-natural-text font-bold block">
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Data Venc.</span>
+                    <span className="text-natural-text font-bold block truncate">
                       {selectedNotaForDetails.dataVencimento ? formatDateBR(selectedNotaForDetails.dataVencimento) : 'Não informada'}
                     </span>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
-                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Filial Vinculada</span>
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Filial</span>
                     <span className="text-natural-text font-bold block truncate">{selectedNotaForDetails.filial || 'Não informada'}</span>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
                     <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Nº Contrato</span>
                     <span className="text-indigo-600 font-bold block truncate">{selectedNotaForDetails.contrato || 'Sem contrato'}</span>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1">
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Nº Pedido</span>
+                    <span className="text-natural-text font-bold block truncate">{selectedNotaForDetails.numeroPedido || '-'}</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">Natureza</span>
+                    <span className="text-natural-text font-bold block truncate">{selectedNotaForDetails.natureza || '-'}</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
+                    <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold">CDC</span>
+                    <span className="text-natural-text font-bold block truncate">{selectedNotaForDetails.cdc || '-'}</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl space-y-0.5">
                     <span className="text-natural-muted block uppercase text-[9px] tracking-wider font-bold text-indigo-600">Valor Total</span>
-                    <span className="text-natural-text font-bold block text-sm text-indigo-600">{formatCurrency(selectedNotaForDetails.valorTotalNota)}</span>
+                    <span className="text-natural-text font-bold block text-sm text-indigo-600 truncate">{formatCurrency(selectedNotaForDetails.valorTotalNota)}</span>
                   </div>
                 </div>
 
@@ -1130,26 +1200,28 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-50 text-natural-muted font-mono border-b border-natural-border font-semibold">
                         <tr>
-                          <th className="px-4 py-2.5 w-16 text-center">Qtd</th>
-                          <th className="px-4 py-2.5">Descrição do Item</th>
-                          <th className="px-4 py-2.5 text-right">V. Unitário</th>
-                          <th className="px-4 py-2.5 text-right w-32">V. Total</th>
+                          <th className="px-3.5 py-2.5 w-28">Cód. Totvs</th>
+                          <th className="px-3.5 py-2.5 w-14 text-center">Qtd</th>
+                          <th className="px-3.5 py-2.5">Descrição do Item</th>
+                          <th className="px-3.5 py-2.5 text-right w-28">V. Unitário</th>
+                          <th className="px-3.5 py-2.5 text-right w-28">V. Total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedNotaForDetails.itens.map((item) => (
                           <tr key={item.id} className="hover:bg-slate-50/50">
-                            <td className="px-4 py-3 text-center font-semibold text-natural-text font-mono">{item.quantidade}</td>
-                            <td className="px-4 py-3 text-natural-text font-medium">{item.descricao}</td>
-                            <td className="px-4 py-3 text-right text-natural-text font-mono">{formatCurrency(item.valorUnitario)}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-natural-text font-mono">{formatCurrency(item.valorTotal)}</td>
+                            <td className="px-3.5 py-3 font-mono font-semibold text-slate-700">{item.codigoTotvs || '-'}</td>
+                            <td className="px-3.5 py-3 text-center font-semibold text-natural-text font-mono">{item.quantidade}</td>
+                            <td className="px-3.5 py-3 text-natural-text font-medium">{item.descricao}</td>
+                            <td className="px-3.5 py-3 text-right text-natural-text font-mono">{formatCurrency(item.valorUnitario)}</td>
+                            <td className="px-3.5 py-3 text-right font-semibold text-natural-text font-mono">{formatCurrency(item.valorTotal)}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-slate-50 border-t border-natural-border font-mono font-semibold">
                         <tr>
-                          <td colSpan={3} className="px-4 py-2.5 text-right text-natural-muted">Total Soma de Itens:</td>
-                          <td className="px-4 py-2.5 text-right text-natural-text font-mono">{formatCurrency(selectedNotaForDetails.valorTotalNota)}</td>
+                          <td colSpan={4} className="px-3.5 py-2.5 text-right text-natural-muted">Total Soma de Itens:</td>
+                          <td className="px-3.5 py-2.5 text-right text-natural-text font-mono">{formatCurrency(selectedNotaForDetails.valorTotalNota)}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1454,6 +1526,60 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     />
                   </div>
                 </div>
+
+                {/* Campos N. Pedido (06 dígitos), Natureza (05 dígitos) e CDC (06 dígitos) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-natural-text flex items-center justify-between">
+                      <span>Nº Pedido</span>
+                      <span className="text-[10px] text-natural-muted font-mono">(06 dígitos)</span>
+                    </label>
+                    <input
+                      id="nf-input-pedido"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={numeroPedido}
+                      onChange={(e) => setNumeroPedido(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Ex: 104829"
+                      className="w-full bg-slate-50 border border-natural-border rounded-xl px-3.5 py-2 text-xs text-natural-text placeholder-natural-muted focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-natural-text flex items-center justify-between">
+                      <span>Natureza</span>
+                      <span className="text-[10px] text-natural-muted font-mono">(05 dígitos)</span>
+                    </label>
+                    <input
+                      id="nf-input-natureza"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
+                      value={natureza}
+                      onChange={(e) => setNatureza(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                      placeholder="Ex: 11020"
+                      className="w-full bg-slate-50 border border-natural-border rounded-xl px-3.5 py-2 text-xs text-natural-text placeholder-natural-muted focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-natural-text flex items-center justify-between">
+                      <span>CDC</span>
+                      <span className="text-[10px] text-natural-muted font-mono">(06 dígitos)</span>
+                    </label>
+                    <input
+                      id="nf-input-cdc"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={cdc}
+                      onChange={(e) => setCdc(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Ex: 020101"
+                      className="w-full bg-slate-50 border border-natural-border rounded-xl px-3.5 py-2 text-xs text-natural-text placeholder-natural-muted focus:outline-hidden focus:ring-4 focus:ring-natural-accent/30 focus:border-natural-primary focus:bg-white transition-all font-mono"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* 3. Items list with sub-form */}
@@ -1471,11 +1597,29 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                 <div className="bg-slate-50/60 border border-natural-border p-3 rounded-xl space-y-3">
                   <span className="text-[10px] font-bold text-natural-muted uppercase font-mono block">Inserir Novo Item</span>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
                     
+                    {/* Código Totvs (10 dígitos) */}
+                    <div className="sm:col-span-3 space-y-1">
+                      <label className="block text-[10px] font-bold text-natural-text flex items-center justify-between">
+                        <span>Código Totvs</span>
+                        <span className="text-[9px] text-natural-muted font-mono">10 díg</span>
+                      </label>
+                      <input
+                        id="temp-item-totvs"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={tempCodigoTotvs}
+                        onChange={(e) => setTempCodigoTotvs(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="Ex: 0001048291"
+                        className="w-full bg-white border border-natural-border rounded-lg px-2.5 py-1.5 text-xs text-natural-text font-mono focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                      />
+                    </div>
+
                     {/* Item Description */}
-                    <div className="md:col-span-6 space-y-1">
-                      <label className="block text-[10px] font-bold text-natural-text">Descrição do Item</label>
+                    <div className="sm:col-span-4 space-y-1">
+                      <label className="block text-[10px] font-bold text-natural-text">Descrição do Item *</label>
                       <input
                         id="temp-item-desc"
                         type="text"
@@ -1487,7 +1631,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     </div>
 
                     {/* Quantity */}
-                    <div className="md:col-span-2 space-y-1">
+                    <div className="sm:col-span-2 space-y-1">
                       <label className="block text-[10px] font-bold text-natural-text">Qtd</label>
                       <input
                         id="temp-item-qtd"
@@ -1500,7 +1644,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     </div>
 
                     {/* Unit Value */}
-                    <div className="md:col-span-3 space-y-1">
+                    <div className="sm:col-span-2 space-y-1">
                       <label className="block text-[10px] font-bold text-natural-text">V. Unitário (R$)</label>
                       <input
                         id="temp-item-value"
@@ -1513,7 +1657,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     </div>
 
                     {/* Add Button */}
-                    <div className="md:col-span-1">
+                    <div className="sm:col-span-1">
                       <button
                         id="btn-add-temp-item"
                         type="button"
@@ -1538,6 +1682,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                     <table className="w-full text-xs text-left">
                       <thead className="bg-slate-50 text-natural-muted font-mono border-b border-natural-border font-semibold">
                         <tr>
+                          <th className="px-3 py-2 w-28">Cód. Totvs</th>
                           <th className="px-3 py-2 w-12 text-center">Qtd</th>
                           <th className="px-3 py-2">Descrição</th>
                           <th className="px-3 py-2 text-right">Unitário</th>
@@ -1548,6 +1693,7 @@ export default function NotaFiscalList({ notasFiscais, empresasFiliais, onSave, 
                       <tbody className="divide-y divide-slate-100">
                         {itens.map((item) => (
                           <tr key={item.id} className="hover:bg-slate-50/40">
+                            <td className="px-3 py-2 text-slate-700 font-mono font-semibold">{item.codigoTotvs || '-'}</td>
                             <td className="px-3 py-2 text-center font-bold text-natural-text font-mono">{item.quantidade}</td>
                             <td className="px-3 py-2 text-natural-text">{item.descricao}</td>
                             <td className="px-3 py-2 text-right text-natural-text font-mono">{formatCurrency(item.valorUnitario)}</td>
