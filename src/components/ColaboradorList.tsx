@@ -31,6 +31,7 @@ import { Colaborador } from '../types';
 import { SETORES, formatLocalDate } from '../data';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { ExportPdfModal } from './ExportPdfModal';
 
 interface ColaboradorListProps {
   colaboradores: Colaborador[];
@@ -152,6 +153,9 @@ export default function ColaboradorList({
 
   // Detail Modal / Panel for single Colaborador
   const [activeDetailsColab, setActiveDetailsColab] = useState<Colaborador | null>(null);
+
+  // Custom Export PDF Modal
+  const [isExportPdfModalOpen, setIsExportPdfModalOpen] = useState(false);
 
   // Filter & Sort collaborateurs
   const filteredAndSortedColaboradores = useMemo(() => {
@@ -504,14 +508,14 @@ export default function ColaboradorList({
           <button
             id="export-full-list-pdf-btn"
             disabled={filteredAndSortedColaboradores.length === 0}
-            onClick={exportFullListPDF}
+            onClick={() => setIsExportPdfModalOpen(true)}
             className={`font-semibold text-xs py-2.5 px-5 rounded-full inline-flex items-center space-x-2 transition-all cursor-pointer border ${
               filteredAndSortedColaboradores.length === 0
                 ? 'bg-natural-light border-natural-border text-natural-muted cursor-not-allowed'
-                : 'bg-white hover:bg-natural-light text-natural-text border-natural-border shadow-xs'
+                : 'bg-white hover:bg-natural-light text-natural-text border-natural-border shadow-xs hover:border-sky-300'
             }`}
           >
-            <FileDown size={14} />
+            <FileDown size={14} className="text-sky-600" />
             <span>Exportar Lista (PDF)</span>
           </button>
         </div>
@@ -1221,6 +1225,20 @@ export default function ColaboradorList({
           </div>
         </div>
       )}
+
+      {/* Dynamic Column Customizer for PDF Export */}
+      <ExportPdfModal
+        isOpen={isExportPdfModalOpen}
+        onClose={() => setIsExportPdfModalOpen(false)}
+        colaboradores={filteredAndSortedColaboradores}
+        userSettings={userSettings}
+        appliedFilters={{
+          setor: selectedSector,
+          filial: selectedFilial,
+          status: selectedStatus,
+          search: searchQuery || nameFilter
+        }}
+      />
 
     </div>
   );

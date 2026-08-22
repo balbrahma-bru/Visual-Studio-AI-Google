@@ -1033,9 +1033,16 @@ export default function EmpresaFiliaisList({
                               </span>
                             )}
                           </div>
-                          {item.nomeFantasia && (
-                            <span className="block text-[10px] text-slate-400 font-normal truncate max-w-[180px]">
-                              {item.nomeFantasia}
+                          {item.responsavel ? (
+                            <span 
+                              className="block text-[10px] text-slate-500 font-normal truncate max-w-[190px]" 
+                              title={`Gestão da Unidade: ${item.responsavel}${item.cargoResponsavel ? ` (${item.cargoResponsavel})` : ''}`}
+                            >
+                              {item.responsavel}
+                            </span>
+                          ) : (
+                            <span className="block text-[10px] text-slate-400 font-normal italic">
+                              Sem gestão def.
                             </span>
                           )}
                         </div>
@@ -1168,8 +1175,15 @@ export default function EmpresaFiliaisList({
                       )}
                     </div>
                     <h3 className="font-bold text-natural-text text-sm">{item.filial}</h3>
-                    {item.nomeFantasia && (
-                      <p className="text-[11px] text-slate-400">{item.nomeFantasia}</p>
+                    {item.responsavel ? (
+                      <p 
+                        className="text-[11px] text-slate-500 font-normal truncate" 
+                        title={`Gestão da Unidade: ${item.responsavel}${item.cargoResponsavel ? ` (${item.cargoResponsavel})` : ''}`}
+                      >
+                        {item.responsavel}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic">Sem gestão def.</p>
                     )}
                   </div>
                 </div>
