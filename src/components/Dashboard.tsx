@@ -27,6 +27,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { Colaborador } from '../types';
+import { normalizeEmpresa, normalizeFilial } from '../data';
 
 interface DashboardProps {
   colaboradores: Colaborador[];
@@ -72,26 +73,25 @@ export default function Dashboard({ colaboradores, onAddClick }: DashboardProps)
       }
     }
 
-    // 1. Discover all unique companies among active collaborators
-    const empresasSet = new Set<string>();
+    // 1. Discover all unique companies among active collaborators (Grouped case-insensitively & normalized)
+    const empresaMap: { [empresa: string]: number } = {};
     colaboradoresAtivos.forEach(c => {
-      const emp = (c.empresa || '').trim();
-      empresasSet.add(emp || 'Não Informada');
+      const emp = normalizeEmpresa(c.empresa);
+      empresaMap[emp] = (empresaMap[emp] || 0) + 1;
     });
 
-    const empresasList = Array.from(empresasSet).sort((a, b) => {
+    const empresasList = Object.keys(empresaMap).sort((a, b) => {
       if (a === 'Bio Brands') return -1;
       if (b === 'Bio Brands') return 1;
       if (a === 'Bio Scientific') return -1;
       if (b === 'Bio Scientific') return 1;
-      return a.localeCompare(b);
+      if (a === 'Terceiros') return -1;
+      if (b === 'Terceiros') return 1;
+      return a.localeCompare(b, 'pt-BR');
     });
 
     // Summary counts per company (active only)
-    const activePerEmpresa: { [empresa: string]: number } = {};
-    empresasList.forEach(emp => {
-      activePerEmpresa[emp] = colaboradoresAtivos.filter(c => ((c.empresa || '').trim() || 'Não Informada') === emp).length;
-    });
+    const activePerEmpresa = empresaMap;
 
     // Empresa chart data for pie/donut
     const empresaChartData = empresasList.map((emp, index) => ({
@@ -100,11 +100,12 @@ export default function Dashboard({ colaboradores, onAddClick }: DashboardProps)
       color: EMPRESA_COLORS[emp] || COLOR_PALETTE[index % COLOR_PALETTE.length]
     })).filter(item => item.value > 0);
 
-    // 2. Discover all unique filiais among active collaborators
+    // 2. Discover all unique filiais among active collaborators (Grouped case-insensitively & normalized)
     const filialMap: { [filial: string]: { total: number; empresa: string } } = {};
     colaboradoresAtivos.forEach(c => {
-      const filialName = (c.filial || '').trim() || 'Matriz / Sede';
-      const empresaName = (c.empresa || '').trim() || 'Não Informada';
+      const rawFilial = normalizeFilial(c.filial);
+      const filialName = rawFilial || 'MATRIZ / SEDE';
+      const empresaName = normalizeEmpresa(c.empresa);
       if (!filialMap[filialName]) {
         filialMap[filialName] = { total: 0, empresa: empresaName };
       }
@@ -129,8 +130,8 @@ export default function Dashboard({ colaboradores, onAddClick }: DashboardProps)
     } = {};
 
     colaboradoresAtivos.forEach(c => {
-      const sector = (c.setor || '').trim() || 'Não Definido';
-      const empresa = (c.empresa || '').trim() || 'Não Informada';
+      const sector = (c.setor || '').trim().replace(/\s+/g, ' ') || 'Não Definido';
+      const empresa = normalizeEmpresa(c.empresa);
 
       if (!sectorMap[sector]) {
         sectorMap[sector] = {

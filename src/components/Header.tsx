@@ -13,6 +13,7 @@ interface HeaderProps {
   userSettings: UserSettings;
   openSettings: () => void;
   openDatabaseModal?: () => void;
+  openMySQLConnectModal?: () => void;
   onLogout?: () => void;
 }
 
@@ -27,6 +28,7 @@ export default function Header({
   userSettings,
   openSettings,
   openDatabaseModal,
+  openMySQLConnectModal,
   onLogout,
 }: HeaderProps) {
   const [profileOpen, setProfileOpen] = useState(false);
@@ -95,15 +97,26 @@ export default function Header({
       </div>
 
       {/* Right section: System notifications & User Profile Dropdown */}
-      <div className="flex items-center space-x-3 md:space-x-4 ml-4 shrink-0">
+      <div className="flex items-center space-x-2 md:space-x-3 ml-4 shrink-0">
+        <button
+          id="btn-open-mysql-live"
+          onClick={openMySQLConnectModal}
+          className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
+          title="Conectar e Testar Banco MySQL em 100.24.209.39:3306"
+        >
+          <Database size={14} className="text-indigo-200" />
+          <span className="hidden lg:inline">Conectar</span>
+          <span className="font-mono text-[11px]">MySQL (100.24.209.39)</span>
+        </button>
+
         <button
           id="btn-open-db-header"
           onClick={openDatabaseModal}
-          className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-700 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-2xs"
-          title="Ver e Baixar Script MySQL do Banco de Dados"
+          className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-700 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+          title="Ver e Baixar Script MySQL do Banco de Dados (.sql)"
         >
-          <Database size={14} className="text-indigo-600" />
-          <span>Banco MySQL</span>
+          <Database size={13} className="text-indigo-600" />
+          <span>Script SQL</span>
         </button>
 
         <div className="hidden sm:flex items-center space-x-2 text-xs text-natural-muted font-mono">
@@ -165,15 +178,27 @@ export default function Header({
                 </button>
 
                 <button
+                  id="dropdown-mysql-live-btn"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    if (openMySQLConnectModal) openMySQLConnectModal();
+                  }}
+                  className="w-full text-left px-4 py-2 text-xs text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 font-semibold flex items-center transition-colors cursor-pointer"
+                >
+                  <Database size={14} className="mr-2 text-indigo-600" />
+                  Conexão MySQL (100.24.209.39)
+                </button>
+
+                <button
                   id="dropdown-database-btn"
                   onClick={() => {
                     setProfileOpen(false);
                     if (openDatabaseModal) openDatabaseModal();
                   }}
-                  className="w-full text-left px-4 py-2 text-xs text-natural-text hover:bg-indigo-50 hover:text-indigo-700 flex items-center transition-colors cursor-pointer"
+                  className="w-full text-left px-4 py-2 text-xs text-natural-text hover:bg-slate-100 flex items-center transition-colors cursor-pointer"
                 >
-                  <Database size={14} className="mr-2 text-indigo-600" />
-                  Banco de Dados MySQL (.sql)
+                  <Database size={14} className="mr-2 text-slate-500" />
+                  Exportar Script SQL (.sql)
                 </button>
 
                 <div className="px-4 py-2">

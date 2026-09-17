@@ -20,18 +20,21 @@ import {
   Filter,
   Users,
   Building,
+  Building2,
   MapPin,
   Activity,
   ChevronDown,
   RotateCcw,
   Search,
-  X
+  X,
+  Database
 } from 'lucide-react';
 import { Colaborador } from '../types';
-import { SETORES, formatLocalDate } from '../data';
+import { SETORES, formatLocalDate, formatTelefone, normalizeEmpresa, normalizeFilial } from '../data';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ExportPdfModal } from './ExportPdfModal';
+import MySQLColaboradoresSyncModal from './MySQLColaboradoresSyncModal';
 
 interface ColaboradorListProps {
   colaboradores: Colaborador[];
@@ -40,6 +43,9 @@ interface ColaboradorListProps {
   onDelete: (id: string) => void;
   userSettings: { empresa: string };
   onAddNew: () => void;
+  onUpdateColaboradores?: (colaboradores: Colaborador[]) => void;
+  selectedEmpresa?: string;
+  setSelectedEmpresa?: (empresa: string) => void;
   selectedSector?: string;
   setSelectedSector?: (sector: string) => void;
   selectedFilial?: string;
@@ -62,6 +68,9 @@ export default function ColaboradorList({
   onDelete,
   userSettings,
   onAddNew,
+  onUpdateColaboradores,
+  selectedEmpresa: propSelectedEmpresa,
+  setSelectedEmpresa: propSetSelectedEmpresa,
   selectedSector: propSelectedSector,
   setSelectedSector: propSetSelectedSector,
   selectedFilial: propSelectedFilial,
@@ -74,9 +83,13 @@ export default function ColaboradorList({
   setSortOrder: propSetSortOrder,
 }: ColaboradorListProps) {
   // Filters state (internal fallback)
+  const [internalEmpresa, setInternalEmpresa] = useState<string>('Todos');
   const [internalSector, setInternalSector] = useState<string>('Todos');
   const [internalFilial, setInternalFilial] = useState<string>('Todos');
   const [internalStatus, setInternalStatus] = useState<string>('Ativo');
+
+  const selectedEmpresa = propSelectedEmpresa ?? internalEmpresa;
+  const setSelectedEmpresa = propSetSelectedEmpresa ?? setInternalEmpresa;
 
   const selectedSector = propSelectedSector ?? internalSector;
   const setSelectedSector = propSetSelectedSector ?? setInternalSector;
@@ -87,49 +100,139 @@ export default function ColaboradorList({
   const selectedStatus = propSelectedStatus ?? internalStatus;
   const setSelectedStatus = propSetSelectedStatus ?? setInternalStatus;
 
-  // Compute unique Sectors from colaboradores with status 'Ativo' ONLY
+  // Compute unique Empresas from colaboradores with status 'Ativo' ONLY (Grouped case-insensitively and space-normalized)
+  const ALL_EMPRESAS = useMemo(() => {
+    const activeColabs = colaboradores.filter(
+      (c) => (c.status || '').trim().toLowerCase() === 'ativo'
+    );
+    const map = new Map<string, string>();
+    activeColabs.forEach((c) => {
+      if (c.empresa) {
+        const trimmed = c.empresa.trim().replace(/\s+/g, ' ');
+        if (trimmed) {
+          const norm = normalizeEmpresa(trimmed);
+          const key = norm.toLowerCase();
+          if (!map.has(key)) {
+            map.set(key, norm);
+          }
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      if (a === 'Bio Brands') return -1;
+      if (b === 'Bio Brands') return 1;
+      if (a === 'Bio Scientific') return -1;
+      if (b === 'Bio Scientific') return 1;
+      if (a === 'Terceiros') return -1;
+      if (b === 'Terceiros') return 1;
+      return a.localeCompare(b, 'pt-BR');
+    });
+  }, [colaboradores]);
+
+  // Compute unique Sectors from colaboradores with status 'Ativo' ONLY (Grouped case-insensitively)
   const ALL_SETORES = useMemo(() => {
     const activeColabs = colaboradores.filter(
       (c) => (c.status || '').trim().toLowerCase() === 'ativo'
     );
-    const presentSectors = activeColabs
-      .map((c) => c.setor?.trim())
-      .filter(Boolean) as string[];
-    const set = new Set(presentSectors);
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const map = new Map<string, string>();
+    activeColabs.forEach((c) => {
+      if (c.setor) {
+        const trimmed = c.setor.trim().replace(/\s+/g, ' ');
+        if (trimmed) {
+          const key = trimmed.toLowerCase();
+          if (!map.has(key)) {
+            const match = SETORES.find((s) => s.toLowerCase() === key);
+            map.set(key, match || trimmed);
+          }
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [colaboradores]);
 
-  // Compute unique Filiais from colaboradores with status 'Ativo' ONLY
+  // Compute unique Filiais from colaboradores with status 'Ativo' ONLY (Grouped case-insensitively and space-normalized)
   const ALL_FILIAIS = useMemo(() => {
     const activeColabs = colaboradores.filter(
       (c) => (c.status || '').trim().toLowerCase() === 'ativo'
     );
-    const presentFiliais = activeColabs
-      .map((c) => c.filial?.trim())
-      .filter(Boolean) as string[];
-    const set = new Set(presentFiliais);
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const map = new Map<string, string>();
+    activeColabs.forEach((c) => {
+      if (c.filial) {
+        const trimmed = c.filial.trim().replace(/\s+/g, ' ');
+        if (trimmed) {
+          const key = trimmed.toUpperCase();
+          if (!map.has(key)) {
+            map.set(key, key);
+          }
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [colaboradores]);
 
-  // Compute active sector counts
-  const sectorCounts = useMemo(() => {
+  // Normalized values for select components
+  const normalizedSelectedEmpresa = useMemo(() => {
+    if (selectedEmpresa === 'Todos') return 'Todos';
+    const match = ALL_EMPRESAS.find(
+      (e) => e.trim().toLowerCase() === selectedEmpresa.trim().toLowerCase()
+    );
+    return match || selectedEmpresa;
+  }, [selectedEmpresa, ALL_EMPRESAS]);
+
+  const normalizedSelectedSector = useMemo(() => {
+    if (selectedSector === 'Todos') return 'Todos';
+    const match = ALL_SETORES.find(
+      (s) => s.trim().toLowerCase() === selectedSector.trim().toLowerCase()
+    );
+    return match || selectedSector;
+  }, [selectedSector, ALL_SETORES]);
+
+  const normalizedSelectedFilial = useMemo(() => {
+    if (selectedFilial === 'Todos') return 'Todos';
+    const match = ALL_FILIAIS.find(
+      (f) => f.trim().toUpperCase() === selectedFilial.trim().toUpperCase()
+    );
+    return match || selectedFilial;
+  }, [selectedFilial, ALL_FILIAIS]);
+
+  // Compute active empresa counts grouped by canonical empresa
+  const empresaCounts = useMemo(() => {
     const map: Record<string, number> = {};
     colaboradores.forEach((c) => {
-      if ((c.status || '').trim().toLowerCase() === 'ativo' && c.setor) {
-        const sec = c.setor.trim();
-        map[sec] = (map[sec] || 0) + 1;
+      if ((c.status || '').trim().toLowerCase() === 'ativo' && c.empresa) {
+        const norm = normalizeEmpresa(c.empresa);
+        const key = norm.toLowerCase();
+        if (key) {
+          map[key] = (map[key] || 0) + 1;
+        }
       }
     });
     return map;
   }, [colaboradores]);
 
-  // Compute active filial counts
+  // Compute active sector counts grouped by canonical sector
+  const sectorCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    colaboradores.forEach((c) => {
+      if ((c.status || '').trim().toLowerCase() === 'ativo' && c.setor) {
+        const key = c.setor.trim().replace(/\s+/g, ' ').toLowerCase();
+        if (key) {
+          map[key] = (map[key] || 0) + 1;
+        }
+      }
+    });
+    return map;
+  }, [colaboradores]);
+
+  // Compute active filial counts grouped by canonical uppercase filial
   const filialCounts = useMemo(() => {
     const map: Record<string, number> = {};
     colaboradores.forEach((c) => {
       if ((c.status || '').trim().toLowerCase() === 'ativo' && c.filial) {
-        const fil = c.filial.trim();
-        map[fil] = (map[fil] || 0) + 1;
+        const key = c.filial.trim().replace(/\s+/g, ' ').toUpperCase();
+        if (key) {
+          map[key] = (map[key] || 0) + 1;
+        }
       }
     });
     return map;
@@ -139,7 +242,12 @@ export default function ColaboradorList({
   const [nameFilter, setNameFilter] = useState('');
 
   // Number of active filters
-  const activeFiltersCount = (nameFilter.trim() ? 1 : 0) + (selectedSector !== 'Todos' ? 1 : 0) + (selectedFilial !== 'Todos' ? 1 : 0) + (selectedStatus !== 'Todos' ? 1 : 0);
+  const activeFiltersCount = 
+    (nameFilter.trim() ? 1 : 0) + 
+    (selectedEmpresa !== 'Todos' ? 1 : 0) + 
+    (selectedSector !== 'Todos' ? 1 : 0) + 
+    (selectedFilial !== 'Todos' ? 1 : 0) + 
+    (selectedStatus !== 'Todos' ? 1 : 0);
   
   // Sorting state (internal fallback)
   const [internalSortField, setInternalSortField] = useState<SortField>('nomeCompleto');
@@ -156,6 +264,16 @@ export default function ColaboradorList({
 
   // Custom Export PDF Modal
   const [isExportPdfModalOpen, setIsExportPdfModalOpen] = useState(false);
+
+  // MySQL tb_colaboradores sync modal
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isMySQLSourceActive, setIsMySQLSourceActive] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('colab_source_mysql') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Filter & Sort collaborateurs
   const filteredAndSortedColaboradores = useMemo(() => {
@@ -188,16 +306,28 @@ export default function ColaboradorList({
       );
     }
 
-    // 2. Sector Filter
-    if (selectedSector !== 'Todos') {
-      const targetSec = selectedSector.trim().toLowerCase();
-      result = result.filter((c) => (c.setor || '').trim().toLowerCase() === targetSec);
+    // 1.8 Empresa Filter (Grouped case-insensitively & normalized)
+    if (selectedEmpresa !== 'Todos') {
+      const targetEmp = normalizeEmpresa(selectedEmpresa).toLowerCase();
+      result = result.filter(
+        (c) => normalizeEmpresa(c.empresa).toLowerCase() === targetEmp
+      );
     }
 
-    // 2.5 Filial Filter
+    // 2. Sector Filter
+    if (selectedSector !== 'Todos') {
+      const targetSec = selectedSector.trim().replace(/\s+/g, ' ').toLowerCase();
+      result = result.filter(
+        (c) => (c.setor || '').trim().replace(/\s+/g, ' ').toLowerCase() === targetSec
+      );
+    }
+
+    // 2.5 Filial Filter (Grouped case-insensitively & normalized)
     if (selectedFilial !== 'Todos') {
-      const targetFilial = selectedFilial.trim().toLowerCase();
-      result = result.filter((c) => (c.filial || '').trim().toLowerCase() === targetFilial);
+      const targetFilial = selectedFilial.trim().replace(/\s+/g, ' ').toUpperCase();
+      result = result.filter(
+        (c) => (c.filial || '').trim().replace(/\s+/g, ' ').toUpperCase() === targetFilial
+      );
     }
 
     // 3. Status Filter
@@ -228,7 +358,7 @@ export default function ColaboradorList({
     });
 
     return result;
-  }, [colaboradores, searchQuery, nameFilter, selectedSector, selectedFilial, selectedStatus, sortField, sortOrder]);
+  }, [colaboradores, searchQuery, nameFilter, selectedEmpresa, selectedSector, selectedFilial, selectedStatus, sortField, sortOrder]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -443,7 +573,8 @@ export default function ColaboradorList({
     doc.setFont('helvetica', 'bold');
     doc.text('Telefone / WhatsApp:', 18, 200);
     doc.setFont('helvetica', 'normal');
-    doc.text(c.telefone || 'Não informado', 52, 200);
+    const phoneDisplay = c.telefone ? formatTelefone(c.telefone).replace(/\n/g, ' / ') : 'Não informado';
+    doc.text(phoneDisplay, 52, 200);
 
     // Section 4: Termo de Responsabilidade e Assinaturas
     doc.setFontSize(11);
@@ -495,7 +626,21 @@ export default function ColaboradorList({
           </p>
         </div>
 
-        <div className="flex items-center space-x-2.5 shrink-0">
+        <div className="flex items-center space-x-2.5 shrink-0 flex-wrap gap-y-2">
+          <button
+            id="btn-sync-mysql-colabs"
+            onClick={() => setIsSyncModalOpen(true)}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs py-2.5 px-4 rounded-full inline-flex items-center space-x-1.5 transition-all cursor-pointer border border-indigo-200 shadow-2xs hover:border-indigo-300"
+            title="Carregar colaboradores com status ativo = 1 da tabela tb_colaborador no MySQL (100.24.209.39)"
+          >
+            <Database size={14} className="text-indigo-600" />
+            <span className="hidden sm:inline">MySQL</span>
+            <span>tb_colaborador</span>
+            <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+              ativo = 1
+            </span>
+          </button>
+
           <button
             id="add-new-colab-btn"
             onClick={onAddNew}
@@ -521,6 +666,47 @@ export default function ColaboradorList({
         </div>
       </div>
 
+      {/* MySQL tb_colaborador banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 rounded-2xl border border-indigo-900/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+            <Database size={18} />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+              <span className="text-xs font-bold text-white tracking-tight">
+                Origem MySQL: <code className="text-indigo-300 font-mono">tb_colaborador</code>
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                ativo = 1
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                100.24.209.39:3306 (root)
+              </span>
+              {isMySQLSourceActive && (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                  Sincronizado
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-indigo-200/80 leading-relaxed mt-0.5">
+              {isMySQLSourceActive
+                ? `Exibindo a lista de colaboradores ativos recuperada da tabela tb_colaborador do banco MySQL.`
+                : `Conecte-se e carregue os colaboradores com status ativo = 1 diretamente da tabela tb_colaborador.`}
+            </p>
+          </div>
+        </div>
+
+        <button
+          id="btn-sync-colabs-action"
+          onClick={() => setIsSyncModalOpen(true)}
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+        >
+          <Database size={13} />
+          <span>{isMySQLSourceActive ? 'Sincronizar Novamente' : 'Carregar do MySQL (ativo = 1)'}</span>
+        </button>
+      </div>
+
       {/* Advanced Quick Filters Panel */}
       <div className="bg-white border border-natural-border rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
@@ -539,6 +725,7 @@ export default function ColaboradorList({
               id="btn-reset-quick-filters"
               onClick={() => {
                 setNameFilter('');
+                setSelectedEmpresa('Todos');
                 setSelectedSector('Todos');
                 setSelectedFilial('Todos');
                 setSelectedStatus('Todos');
@@ -551,18 +738,18 @@ export default function ColaboradorList({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
           {/* Localizar Colaborador Input */}
           <div className="space-y-1.5">
             <label htmlFor="input-filter-nome" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
               <Search size={13} className="text-natural-primary" />
-              <span>Localizar Colaborador</span>
+              <span>Localizar</span>
             </label>
             <div className="relative">
               <input
                 id="input-filter-nome"
                 type="text"
-                placeholder="Digite o nome..."
+                placeholder="Nome..."
                 value={nameFilter}
                 onChange={(e) => setNameFilter(e.target.value)}
                 className={`w-full bg-natural-light border rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-natural-text transition-all focus:outline-hidden ${
@@ -587,16 +774,51 @@ export default function ColaboradorList({
               )}
             </div>
           </div>
+
+          {/* Empresa Listbox */}
+          <div className="space-y-1.5">
+            <label htmlFor="select-listbox-empresa" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
+              <Building2 size={13} className="text-natural-primary" />
+              <span>Empresa (Ativas)</span>
+            </label>
+            <div className="relative">
+              <select
+                id="select-listbox-empresa"
+                value={normalizedSelectedEmpresa}
+                onChange={(e) => setSelectedEmpresa(e.target.value)}
+                className={`w-full appearance-none bg-natural-light border rounded-xl px-3.5 py-2.5 pr-9 text-xs font-medium text-natural-text transition-all focus:outline-hidden cursor-pointer ${
+                  selectedEmpresa !== 'Todos'
+                    ? 'border-natural-primary ring-2 ring-natural-accent/30 bg-natural-accent/10 font-semibold'
+                    : 'border-natural-border hover:border-natural-primary/50 focus:border-natural-primary focus:ring-2 focus:ring-natural-accent/20'
+                }`}
+              >
+                <option value="Todos">Todas as Empresas ({ALL_EMPRESAS.length})</option>
+                {ALL_EMPRESAS.map((emp) => {
+                  const key = emp.toLowerCase();
+                  const count = empresaCounts[key] || 0;
+                  return (
+                    <option key={emp} value={emp}>
+                      {emp} {count > 0 ? `(${count})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-natural-muted">
+                <ChevronDown size={14} />
+              </div>
+            </div>
+          </div>
+
           {/* Sector Listbox */}
           <div className="space-y-1.5">
             <label htmlFor="select-listbox-setor" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
               <Building size={13} className="text-natural-primary" />
-              <span>Setor Corporativo (Ativos)</span>
+              <span>Setor (Ativos)</span>
             </label>
             <div className="relative">
               <select
                 id="select-listbox-setor"
-                value={selectedSector}
+                value={normalizedSelectedSector}
                 onChange={(e) => setSelectedSector(e.target.value)}
                 className={`w-full appearance-none bg-natural-light border rounded-xl px-3.5 py-2.5 pr-9 text-xs font-medium text-natural-text transition-all focus:outline-hidden cursor-pointer ${
                   selectedSector !== 'Todos'
@@ -606,7 +828,8 @@ export default function ColaboradorList({
               >
                 <option value="Todos">Todos os Setores ({ALL_SETORES.length})</option>
                 {ALL_SETORES.map((sec) => {
-                  const count = sectorCounts[sec] || 0;
+                  const key = sec.trim().replace(/\s+/g, ' ').toLowerCase();
+                  const count = sectorCounts[key] || 0;
                   return (
                     <option key={sec} value={sec}>
                       {sec} {count > 0 ? `(${count})` : ''}
@@ -629,7 +852,7 @@ export default function ColaboradorList({
             <div className="relative">
               <select
                 id="select-listbox-filial"
-                value={selectedFilial}
+                value={normalizedSelectedFilial}
                 onChange={(e) => setSelectedFilial(e.target.value)}
                 className={`w-full appearance-none bg-natural-light border rounded-xl px-3.5 py-2.5 pr-9 text-xs font-medium text-natural-text transition-all focus:outline-hidden cursor-pointer ${
                   selectedFilial !== 'Todos'
@@ -639,7 +862,8 @@ export default function ColaboradorList({
               >
                 <option value="Todos">Todas as Filiais ({ALL_FILIAIS.length})</option>
                 {ALL_FILIAIS.map((filial) => {
-                  const count = filialCounts[filial] || 0;
+                  const key = filial.trim().replace(/\s+/g, ' ').toUpperCase();
+                  const count = filialCounts[key] || 0;
                   return (
                     <option key={filial} value={filial}>
                       {filial} {count > 0 ? `(${count})` : ''}
@@ -657,7 +881,7 @@ export default function ColaboradorList({
           <div className="space-y-1.5">
             <label htmlFor="select-listbox-status" className="text-[11px] font-bold text-natural-muted uppercase tracking-wider flex items-center space-x-1.5">
               <Activity size={13} className="text-natural-primary" />
-              <span>Status do Cadastro</span>
+              <span>Status</span>
             </label>
             <div className="relative">
               <select
@@ -744,25 +968,7 @@ export default function ColaboradorList({
                       </div>
                     </th>
 
-                    {/* Cargo */}
-                    <th
-                      className="py-4 px-4 cursor-pointer hover:bg-natural-light/50 transition-colors select-none group"
-                      onClick={() => handleSort('cargo')}
-                      title="Clique para ordenar por Cargo"
-                    >
-                      <div className="flex items-center space-x-1.5">
-                        <span className={sortField === 'cargo' ? 'text-natural-primary font-bold' : ''}>Cargo</span>
-                        {sortField === 'cargo' ? (
-                          sortOrder === 'desc' ? (
-                            <ArrowDown size={13} className="text-natural-primary shrink-0" />
-                          ) : (
-                            <ArrowUp size={13} className="text-natural-primary shrink-0" />
-                          )
-                        ) : (
-                          <ArrowUpDown size={12} className="text-natural-muted opacity-40 group-hover:opacity-100 shrink-0" />
-                        )}
-                      </div>
-                    </th>
+
 
                     {/* Setor */}
                     <th
@@ -843,17 +1049,16 @@ export default function ColaboradorList({
                             <span className="font-semibold text-natural-text block truncate group-hover:text-natural-primary transition-colors">
                               {c.nomeCompleto}
                             </span>
-                            <span className="text-[11px] text-natural-muted block mt-0.5 font-medium">
-                              Ref: {c.exibicao} {c.empresa && `| ${c.empresa} (${c.filial})`}
-                            </span>
+                            {c.exibicao && (
+                              <span className="text-[11px] text-natural-muted block mt-0.5 font-medium">
+                                {c.exibicao}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
 
-                      {/* Cargo */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-medium text-natural-text">{c.cargo}</span>
-                      </td>
+
 
                       {/* Setor */}
                       <td className="py-3.5 px-4">
@@ -972,7 +1177,12 @@ export default function ColaboradorList({
                       <h4 className="font-semibold text-natural-text text-sm leading-snug">
                         {c.nomeCompleto}
                       </h4>
-                      <span className="text-[11px] text-natural-muted block">
+                      {c.exibicao && (
+                        <span className="text-[11px] text-natural-muted block mt-0.5 font-medium">
+                          {c.exibicao}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-natural-muted block mt-1">
                         Setor: <strong className="text-natural-text">{c.setor}</strong>
                       </span>
                       {c.empresa && (
@@ -1233,10 +1443,30 @@ export default function ColaboradorList({
         colaboradores={filteredAndSortedColaboradores}
         userSettings={userSettings}
         appliedFilters={{
+          empresa: selectedEmpresa,
           setor: selectedSector,
           filial: selectedFilial,
           status: selectedStatus,
           search: searchQuery || nameFilter
+        }}
+      />
+
+      {/* MySQL tb_colaboradores Sync Modal */}
+      <MySQLColaboradoresSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        currentActiveCount={filteredAndSortedColaboradores.length}
+        initialColaboradores={colaboradores}
+        onApplyColaboradores={(newColabs) => {
+          if (onUpdateColaboradores) {
+            onUpdateColaboradores(newColabs);
+          }
+          try {
+            localStorage.setItem('colab_source_mysql', 'true');
+            localStorage.setItem('colaboradores_registry', JSON.stringify(newColabs));
+          } catch {}
+          setIsMySQLSourceActive(true);
+          setSelectedStatus('Ativo');
         }}
       />
 

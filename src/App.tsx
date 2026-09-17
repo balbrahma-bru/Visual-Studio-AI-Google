@@ -36,6 +36,7 @@ import NotaFiscalList from './components/NotaFiscalList';
 import EmpresaFiliaisList from './components/EmpresaFiliaisList';
 import DatabaseExportModal from './components/DatabaseExportModal';
 import Administracao from './components/Administracao';
+import MySQLConnectModal from './components/MySQLConnectModal';
 
 // Helper function to decode and validate custom JWT token claims (XSS & Expiry checks)
 function isTokenValid(token: string | null): boolean {
@@ -194,6 +195,7 @@ export default function App() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [databaseModalOpen, setDatabaseModalOpen] = useState(false);
+  const [mysqlModalOpen, setMysqlModalOpen] = useState(false);
   const [colaboradorToEdit, setColaboradorToEdit] = useState<Colaborador | null>(null);
 
   const toggleSidebarCollapsed = () => {
@@ -209,6 +211,7 @@ export default function App() {
   };
 
   // Persistent filter states for ColaboradorList
+  const [colabFilterEmpresa, setColabFilterEmpresa] = useState<string>('Todos');
   const [colabFilterSector, setColabFilterSector] = useState<string>('Todos');
   const [colabFilterFilial, setColabFilterFilial] = useState<string>('Todos');
   const [colabFilterStatus, setColabFilterStatus] = useState<string>('Ativo');
@@ -566,6 +569,7 @@ export default function App() {
           userSettings={userSettings}
           openSettings={() => setSettingsOpen(true)}
           openDatabaseModal={() => setDatabaseModalOpen(true)}
+          openMySQLConnectModal={() => setMysqlModalOpen(true)}
           onLogout={handleLogout}
         />
 
@@ -604,6 +608,8 @@ export default function App() {
                 <ColaboradorList
                   colaboradores={colaboradores}
                   searchQuery={searchQuery}
+                  selectedEmpresa={colabFilterEmpresa}
+                  setSelectedEmpresa={setColabFilterEmpresa}
                   selectedSector={colabFilterSector}
                   setSelectedSector={setColabFilterSector}
                   selectedFilial={colabFilterFilial}
@@ -617,6 +623,10 @@ export default function App() {
                   onEdit={handleEditColaborador}
                   onDelete={handleTriggerDelete}
                   userSettings={userSettings}
+                  onUpdateColaboradores={(newColabs) => {
+                    setColaboradores(newColabs);
+                    addToast(`${newColabs.length} colaborador(es) com status ativo = 1 carregado(s) de tb_colaborador do MySQL!`, 'success');
+                  }}
                   onAddNew={() => {
                     setColaboradorToEdit(null);
                     setActiveTab('cadastro');
@@ -669,6 +679,7 @@ export default function App() {
                     addToast('Todos os colaboradores foram removidos com sucesso. A base de dados está limpa para a nova importação.', 'info');
                   }}
                   userSettings={userSettings}
+                  onOpenMySQLConnect={() => setMysqlModalOpen(true)}
                 />
               )}
             </motion.div>
@@ -702,8 +713,26 @@ export default function App() {
           empresasFiliais={empresasFiliais}
           userSettings={userSettings}
           onClose={() => setDatabaseModalOpen(false)}
+          onOpenMySQLConnect={() => setMysqlModalOpen(true)}
         />
       )}
+
+      {/* MySQL Connection and Live Test Modal */}
+      <MySQLConnectModal
+        isOpen={mysqlModalOpen}
+        onClose={() => setMysqlModalOpen(false)}
+        colaboradores={colaboradores}
+        equipamentos={equipamentos}
+        notasFiscais={notasFiscais}
+        empresasFiliais={empresasFiliais}
+        userSettings={userSettings}
+        onSuccessNotification={(msg) => addToast(msg, 'success')}
+        onLoadColaboradores={(newColabs) => {
+          setColaboradores(newColabs);
+          setActiveTab('colaboradores');
+          setColabFilterStatus('Ativo');
+        }}
+      />
 
       {/* B. Custom Delete Confirmation Dialog & Security Email Dispatcher */}
       {colabIdToDelete && employeeToDelete && (

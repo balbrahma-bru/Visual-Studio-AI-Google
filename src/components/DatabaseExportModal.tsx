@@ -10,6 +10,7 @@ interface DatabaseExportModalProps {
   empresasFiliais?: EmpresaFilial[];
   userSettings: UserSettings;
   onClose: () => void;
+  onOpenMySQLConnect?: () => void;
 }
 
 export default function DatabaseExportModal({
@@ -18,7 +19,8 @@ export default function DatabaseExportModal({
   notasFiscais,
   empresasFiliais = [],
   userSettings,
-  onClose
+  onClose,
+  onOpenMySQLConnect
 }: DatabaseExportModalProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'sql'>('overview');
   const [copied, setCopied] = useState(false);
@@ -149,6 +151,20 @@ export default function DatabaseExportModal({
           </div>
 
           <div className="flex items-center space-x-2 pb-2">
+            {onOpenMySQLConnect && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenMySQLConnect();
+                }}
+                className="px-3 py-1.5 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+                title="Abrir teste de conexão direta com 100.24.209.39:3306"
+              >
+                <Database size={13} className="text-emerald-700" />
+                <span>Testar Conexão Direta (100.24.209.39)</span>
+              </button>
+            )}
+
             <button
               onClick={handleCopy}
               className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"

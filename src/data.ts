@@ -40,7 +40,7 @@ export function formatRG(value: string): string {
   return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}-${digits.slice(8, 9)}`;
 }
 
-export function formatTelefone(value: string): string {
+export function formatSingleTelefone(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 11);
   if (digits.length <= 2) return digits.length > 0 ? `(${digits}` : '';
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
@@ -48,11 +48,38 @@ export function formatTelefone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
 }
 
+export function formatTelefone(value: string): string {
+  if (!value) return '';
+  // If value contains multiple numbers separated by newline, slash, comma or semicolon
+  const parts = value.split(/\r?\n|\/|,|;/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    return parts.map((p) => formatSingleTelefone(p)).join('\n');
+  }
+  return formatSingleTelefone(value);
+}
+
 export function formatLocalDate(dateString: string): string {
   if (!dateString) return '';
   const [year, month, day] = dateString.split('-');
   if (!year || !month || !day) return dateString;
   return `${day}/${month}/${year}`;
+}
+
+export function normalizeEmpresa(empresa?: string | null): string {
+  if (!empresa) return 'Não Informada';
+  const trimmed = empresa.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return 'Não Informada';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'bio brands' || lower === 'biobrands') return 'Bio Brands';
+  if (lower === 'bio scientific' || lower === 'bioscientific') return 'Bio Scientific';
+  if (lower === 'terceiros' || lower === 'terceiro') return 'Terceiros';
+  return trimmed;
+}
+
+export function normalizeFilial(filial?: string | null): string {
+  if (!filial) return '';
+  const trimmed = filial.trim().replace(/\s+/g, ' ');
+  return trimmed.toUpperCase();
 }
 
 export function validateCPF(cpf: string): boolean {

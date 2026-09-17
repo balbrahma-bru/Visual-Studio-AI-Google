@@ -290,6 +290,7 @@ interface ExportPdfModalProps {
   colaboradores: Colaborador[];
   userSettings: { empresa: string };
   appliedFilters: {
+    empresa?: string;
     setor: string;
     filial: string;
     status: string;
@@ -495,6 +496,7 @@ export function ExportPdfModal({
         doc.setFont('helvetica', 'normal');
         
         const filterTexts: string[] = [];
+        if (appliedFilters.empresa && appliedFilters.empresa !== 'Todos') filterTexts.push(`Empresa: ${appliedFilters.empresa}`);
         if (appliedFilters.setor && appliedFilters.setor !== 'Todos') filterTexts.push(`Setor: ${appliedFilters.setor}`);
         if (appliedFilters.filial && appliedFilters.filial !== 'Todos') filterTexts.push(`Filial: ${appliedFilters.filial}`);
         if (appliedFilters.status && appliedFilters.status !== 'Todos') filterTexts.push(`Status: ${appliedFilters.status}`);
@@ -540,6 +542,19 @@ export function ExportPdfModal({
         body: tableRows,
         startY: startTableY,
         theme: 'striped',
+        pageBreak: 'auto',
+        rowPageBreak: 'auto',
+        showHead: 'everyPage',
+        styles: {
+          overflow: 'linebreak',
+          cellPadding: 2,
+          valign: 'middle',
+          fontSize: dynamicFontSize,
+          textColor: [15, 23, 42],
+          cellWidth: 'auto',
+          lineColor: [226, 232, 240],
+          lineWidth: 0.1
+        },
         headStyles: {
           fillColor: [14, 165, 233], // Blue
           textColor: [255, 255, 255],
@@ -559,7 +574,7 @@ export function ExportPdfModal({
           fillColor: [248, 250, 252] // Slate-50
         },
         columnStyles: columnStylesConfig,
-        margin: { left: 14, right: 14, bottom: 16 },
+        margin: { top: 16, left: 14, right: 14, bottom: 16 },
         didDrawPage: (data) => {
           // Footer
           const str = `Página ${data.pageNumber} de ${doc.getNumberOfPages()}`;

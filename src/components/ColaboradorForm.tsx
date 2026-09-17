@@ -223,25 +223,35 @@ export default function ColaboradorForm({ colaboradorToEdit, onSave, onCancel, c
         return (efNorm === normEmp || (empresa === 'Terceiros')) && isAtivo;
       });
 
-      const list = Array.from(
-        new Set(
-          filtered
-            .map(ef => ef.filial?.trim())
-            .filter((f): f is string => Boolean(f))
-        )
-      ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const map = new Map<string, string>();
+      filtered.forEach(ef => {
+        if (ef.filial) {
+          const trimmed = ef.filial.trim().replace(/\s+/g, ' ');
+          if (trimmed) {
+            const key = trimmed.toUpperCase();
+            if (!map.has(key)) {
+              map.set(key, key);
+            }
+          }
+        }
+      });
 
-      if (filial && !list.includes(filial)) {
-        list.push(filial);
+      const list = Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+      if (filial) {
+        const normFilial = filial.trim().replace(/\s+/g, ' ').toUpperCase();
+        if (normFilial && !list.includes(normFilial)) {
+          list.push(normFilial);
+        }
       }
       if (list.length > 0) return list;
     }
 
-    const preferred = FILIAIS_BY_EMPRESA[empresa] || [];
+    const preferred = (FILIAIS_BY_EMPRESA[empresa] || []).map(f => f.trim().replace(/\s+/g, ' ').toUpperCase());
     const set = new Set([...preferred]);
-    if (filial) set.add(filial);
-    if (colaboradorToEdit?.filial) set.add(colaboradorToEdit.filial);
-    return Array.from(set).filter(Boolean);
+    if (filial) set.add(filial.trim().replace(/\s+/g, ' ').toUpperCase());
+    if (colaboradorToEdit?.filial) set.add(colaboradorToEdit.filial.trim().replace(/\s+/g, ' ').toUpperCase());
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [empresa, filial, colaboradorToEdit, empresasFiliais]);
 
   // Validation before saving
